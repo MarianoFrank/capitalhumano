@@ -1,0 +1,48 @@
+dn: ou=consultores,dc=capitalhumano,dc=com
+objectClass: organizationalUnit
+objectClass: top
+ou: consultores
+
+dn: uid=mfrank,ou=consultores,dc=capitalhumano,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: mfrank
+cn: Mariano
+sn: Frank
+employeeNumber: 1001
+userPassword: 1234
+
+dn: uid=jperez,ou=consultores,dc=capitalhumano,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: jperez
+cn: Juan
+sn: Perez
+employeeNumber: 1002
+userPassword: 1234
+
+dn: uid=agomez,ou=consultores,dc=capitalhumano,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: agomez
+cn: Ana
+sn: Gomez
+employeeNumber: 1003
+userPassword: 1234
+
+dn: uid=lmartinez,ou=consultores,dc=capitalhumano,dc=com
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: lmartinez
+cn: Lucas
+sn: Martinez
+employeeNumber: 1004
+userPassword: 1234

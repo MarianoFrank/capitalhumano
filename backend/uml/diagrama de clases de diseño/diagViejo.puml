@@ -1,0 +1,284 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 60
+skinparam ranksep 60
+
+
+' ENUMERACIONES
+
+enum Estado {
+    Activo
+    En_Proceso
+    Completo
+    Incompleto
+    Sin_Contestar
+}
+
+enum TipoDocumento {
+    DNI
+    LE
+    LC
+    PP
+}
+
+enum Genero {
+    H
+    M
+}
+
+enum TipoOpcionRespuesta {
+    SINGLE_CHOICE
+    MULTIPLE_CHOICE
+}
+
+
+' INTERFACES Y CLASES ABSTRACTAS
+
+interface Auditable {
+    + getIdentificadorAuditoria(): String
+}
+
+interface ABM {
+    + darAlta(): Boolean
+    + darBaja(): Boolean
+    + modificar(): Boolean
+}
+
+interface Autenticador {
+    + iniciarSesion(usuario: String, clave: String): Boolean
+    + cerrarSesion(): void
+}
+
+abstract class GestorBase <<Singleton>> {
+    ' Solo los hijos lo pueden ejecutar
+    # registrarAuditoriaBaja(entidad: Auditable, usuario: Usuario): void
+}
+
+
+' SERVICIOS Y AUDITORÍA
+
+class ServicioAutenticacion <<Singleton>> {
+    + iniciarSesion(usuario: String, clave: String): Boolean
+    + cerrarSesion(): void
+}
+
+class RegistroAuditoria {
+    - fecha: Date
+    - hora: Time
+    - descripcionElementoEliminado: String
+}
+
+
+' GESTORES (@Service)
+
+class GestorCandidatos {
+    + importarCandidatos(archivoCSV: File): Boolean
+    + exportarResultados(): Boolean
+}
+
+class GestorCompetencias {
+}
+
+class GestorPuestos {
+}
+
+class GestorFactores {
+}
+
+class GestorPreguntas {
+    + generarPreguntaConIA(): Boolean
+}
+
+class GestorCuestionario {
+    + finalizarCuestionariosVencidos(): Boolean
+}
+
+class GestorEvaluacion {
+    + emitirReporteComparativo(): void
+    + emitirOrdenDeMerito(): void
+}
+
+
+' ENTIDADES (@Entity)
+
+class Usuario {
+    - nombreUsuario: String
+    - contraseña: String
+}
+
+abstract class RolUsuario {
+}
+
+class Consultor {
+}
+
+class Candidato {
+    - nroCandidato: Integer
+    - tipoDocumento: TipoDocumento
+    - nroDocumento: String
+    - nombre: String
+    - apellido: String
+    - fechaNacimiento: Date
+    - genero: Genero
+    - email: String
+    - escolaridad: String
+    - fechaBaja: Date
+    - nacionalidad: String
+}
+
+class Evaluacion {
+    - fechaCreacion: Date
+    - fechaCierre: Date
+    - duracionMinutos: Integer
+}
+
+class Puesto {
+    - empresa: String
+    - codigo: String
+    - nombre: String
+    - descripcion: String
+    - fechaBaja: Date
+}
+
+class CompetenciaPuesto {
+    - ponderacionRequerida: Integer
+}
+
+abstract class Competencia {
+    - codigo: String
+    - nombre: String
+    - descripcion: String
+    - fechaBaja: Date
+}
+
+class CompetenciaTecnica {
+}
+
+class CompetenciaActitudinal {
+}
+
+class Factor {
+    - codigo: String
+    - nombre: String
+    - descripcion: String
+    - nroOrden: Integer
+    - fechaBaja: Date
+}
+
+class Pregunta {
+    - nombre: String
+    - texto: String
+    - descripcion: String
+    - tipo: TipoOpcionRespuesta
+    - fechaBaja: Date
+}
+
+class Opcion {
+    - ordenVisualizacion: Integer
+    - ponderacion: Integer
+    - descripcion: String
+}
+
+class Cuestionario {
+    - nroIntento: Integer
+    - claveIngreso: String
+    - estado: Estado
+    - fechaHoraFin: DateTime
+    - fechaHoraInicio: DateTime
+    - ultimoIngreso: DateTime
+    - cantidadAccesos: Integer
+    - puntajeObtenido: Double
+}
+
+class PuntajeCompetencia {
+    - puntaje: Double
+}
+
+class Bloque {
+    - nroBloque: Integer
+}
+
+class ItemCuestionario {
+    - ordenVisualizacion: Integer
+    - respondido: Boolean
+}
+
+
+' RELACIONES DE GESTIÓN Y SERVICIOS
+
+ServicioAutenticacion ..|> Autenticador : "implementa"
+ServicioAutenticacion --> Usuario : "valida >"
+
+GestorBase ..|> ABM
+GestorCandidatos --|> GestorBase
+GestorCompetencias --|> GestorBase
+GestorPuestos --|> GestorBase
+GestorFactores --|> GestorBase
+GestorPreguntas --|> GestorBase
+GestorCuestionario --|> GestorBase
+GestorEvaluacion --|> GestorBase
+
+Puesto ..|> Auditable
+Competencia ..|> Auditable
+Factor ..|> Auditable
+Pregunta ..|> Auditable
+
+
+GestorCandidatos --> Candidato : "gestiona >"
+GestorCompetencias --> Competencia : "gestiona >"
+GestorPuestos --> Puesto : "gestiona >"
+GestorFactores --> Factor : "gestiona >"
+GestorPreguntas --> Pregunta : "gestiona >"
+GestorCuestionario --> Cuestionario : "gestiona >"
+GestorEvaluacion --> Evaluacion : "gestiona >"
+
+GestorBase --> "*" RegistroAuditoria : "genera >"
+RegistroAuditoria "*" --> "1" Usuario : "realizado por >"
+
+
+' RELACIONES DEL DOMINIO
+
+Usuario "1" --> "1..*" RolUsuario : "asume >"
+
+RolUsuario <|-- Candidato
+RolUsuario <|-- Consultor
+
+Consultor "1" --> "*" Evaluacion : "crea >"
+Evaluacion "*" --> "1" Puesto : "corresponde a >"
+
+Candidato "*" -- "*" Evaluacion
+(Candidato, Evaluacion) .. Cuestionario
+
+Puesto "0..*" -- "1..*" Competencia : "requiere"
+(Puesto, Competencia) .. CompetenciaPuesto
+
+Competencia <|-- CompetenciaTecnica
+Competencia <|-- CompetenciaActitudinal
+
+Competencia "1" *--> "1..*" Factor : "compuesta por >"
+Factor "1" *--> "0..*" Pregunta : "contiene >"
+
+' La pregunta compone a sus opciones y sabe qué tipo es
+Pregunta "1" *--> "2..*" Opcion : "contiene >"
+
+Cuestionario "1" *--> "1..*" Bloque : "contiene >"
+
+' La granularidad del reporte de radar
+Cuestionario "1" *--> "1..*" PuntajeCompetencia : "registra >"
+PuntajeCompetencia "*" --> "1" Competencia : "corresponde a >"
+
+Pregunta "1..*" -- "1..*" Bloque
+(Pregunta, Bloque) .. ItemCuestionario
+
+ItemCuestionario "*" --> "0..*" Opcion : "selecciona >"
+
+
+' ENLACES DE ENUMERADOS
+
+Candidato ..> TipoDocumento
+Candidato ..> Genero
+Cuestionario ..> Estado
+Pregunta ..> TipoOpcionRespuesta
+
+@enduml

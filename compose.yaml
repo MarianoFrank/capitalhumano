@@ -1,0 +1,66 @@
+services:
+
+  # ---------------------------------------------------------------------
+  # BASE DE DATOS POSTGRESQL
+  # - Puerto: 5432
+  # - Base de datos: tm_database
+  # - Usuario: admin | Clave: admin
+  # - Inicialización automática: Ejecuta los scripts en ./sql-init
+  # ---------------------------------------------------------------------
+  postgres:
+    image: 'postgres:16-alpine'
+    container_name: capitalhumano_postgres
+    environment:
+      - 'POSTGRES_DB=tm_database'
+      - 'POSTGRES_PASSWORD=admin'
+      - 'POSTGRES_USER=admin'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql-init:/docker-entrypoint-initdb.d
+
+  # ---------------------------------------------------------------------
+  # SERVIDOR OPENLDAP
+  # - Base DN: dc=capitalhumano,dc=com
+  # - Admin DN: cn=admin,dc=capitalhumano,dc=com
+  # - Admin Clave: admin
+  # - Inicialización automática: Carga todos los .ldif en ./ldap-init
+  # - Usuarios de prueba: mfrank, jperez, agomez, lmartinez (clave: 1234)
+  # ---------------------------------------------------------------------
+  openldap:
+    image: 'osixia/openldap:1.5.0'
+    container_name: capitalhumano_ldap
+    environment:
+      LDAP_ORGANISATION: "Capital Humano"
+      LDAP_DOMAIN: "capitalhumano.com"
+      LDAP_ADMIN_PASSWORD: "admin"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "false" # Permite montar ./ldap-init sin errores de permisos
+    ports:
+      - "389:389"
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+      - ./ldap-init:/container/service/slapd/assets/config/bootstrap/ldif/custom
+
+  # ---------------------------------------------------------------------
+  # GUI WEB PHPLDAPADMIN
+  # - URL en el navegador: http://localhost:8081
+  # - Login DN: cn=admin,dc=capitalhumano,dc=com
+  # - Password: admin
+  # ---------------------------------------------------------------------
+  phpldapadmin:
+    image: 'osixia/phpldapadmin:0.9.0'
+    container_name: capitalhumano_phpldapadmin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "openldap"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - "8081:80"
+    depends_on:
+      - openldap
+
+volumes:
+  postgres_data:
+  ldap_data:
+  ldap_config:

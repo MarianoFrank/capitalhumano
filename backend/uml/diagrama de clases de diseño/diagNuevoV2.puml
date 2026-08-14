@@ -1,0 +1,497 @@
+@startuml
+!pragma layout smetana
+scale max 3500 width
+
+' ==========================================
+' CONFIGURACIONES VISUALES Y ESTILOS
+' ==========================================
+left to right direction
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam classAttributeIconSize 0
+skinparam DefaultFontName "Roboto"
+skinparam DefaultFontSize 13
+skinparam packageStyle rectangle
+
+' Estilos diferenciados por estereotipo
+skinparam class {
+    BackgroundColor White
+    ArrowColor #333333
+    BorderColor #555555
+}
+skinparam class<<Servicio>> {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+    HeaderBackgroundColor #C8E6C9
+}
+skinparam interface<<DAO>> {
+    BackgroundColor #FFF3E0
+    BorderColor #E65100
+    HeaderBackgroundColor #FFE0B2
+}
+skinparam class<<DTO>> {
+    BackgroundColor #F3E5F5
+    BorderColor #6A1B9A
+    HeaderBackgroundColor #E1BEE7
+}
+skinparam class<<Dominio>> {
+    BackgroundColor #FFFFFF
+    BorderColor #424242
+    HeaderBackgroundColor #EEEEEE
+}
+
+' ==========================================
+' ENUMERACIONES
+' ==========================================
+package "Enumeraciones" {
+    enum EstadoCuestionario {
+        ACTIVO
+        EN_PROCESO
+        COMPLETADO
+        INCOMPLETO
+        SIN_CONTESTAR
+    }
+    enum TipoDocumento {
+        DNI
+        LE
+        LC
+        PP
+    }
+    enum TipoPregunta {
+        OPCION_SIMPLE
+        OPCION_MULTIPLE
+    }
+    enum TipoCompetencia {
+        TECNICA
+        ACTITUDINAL
+    }
+    enum Genero {
+        H
+        M
+    }
+}
+
+' ==========================================
+' SERVICIOS DEL SISTEMA (Lógica de Negocio)
+' ==========================================
+package "Servicios del Sistema" {
+
+    class ServicioSeguridad <<Servicio>> {
+        + autenticarConsultor(usuario: String, pass: String): Boolean
+        + autenticarCandidato(claveAcceso: String): Long
+        + esCandidatoDuenio(idCuestionario: Long, usuario: String): Boolean
+    }
+
+    class ServicioCandidato <<Servicio>> {
+        + importarCandidatos(archivoCSV: File): List<Candidato>
+        + obtenerCandidatosPaginados(nombre: String, apellido: String, nro: Long): List<Candidato>
+    }
+
+    class ServicioEvaluacion <<Servicio>> {
+        + crearEvaluacion(idPuesto: Long, idsCandidatos: List<Long>): List<ClaveEvaluacionCandidatoDTO>
+        - generarClaveAcceso(): String
+    }
+
+    class ServicioCuestionario <<Servicio>> {
+        + iniciarCuestionario(idCuestionario: Long): InicioCuestionarioDTO
+        + obtenerBloque(idCuestionario: Long, nroBloque: Integer): BloquePreguntasDTO
+        + registrarRespuestasBloque(idCuestionario: Long, nroBloque: Integer, respuestas: Map): void
+        + calcularPuntajes(idCuestionario: Long): Double
+        + finalizarCuestionariosVencidos(): void
+    }
+
+    class ServicioReporte <<Servicio>> {
+        + emitirOrdenDeMerito(idPuesto: Long, idEval: Long): ReporteOrdenMeritoDTO
+        + obtenerResumenPosiciones(): List<ResumenPosicionDTO>
+        + obtenerResumenEvaluaciones(idPuesto: Long): List<ResumenEvaluacionDTO>
+        - cumpleRequisitosMinimos(cuestionario: Cuestionario, puesto: Puesto): Boolean
+    }
+
+    class ServicioIA <<Servicio>> {
+        + generarPregunta(competencia: String, factor: String, nombreMetrica: String): PreguntaGeneradaIADTO
+    }
+
+    class ServicioAuditoria <<Servicio>> {
+        + registrarBaja(entidad: Auditable, consultor: Consultor): void
+    }
+}
+
+' ==========================================
+' ACCESO A DATOS (DAOs / Repositorios)
+' ==========================================
+package "Acceso a Datos (DAOs)" {
+
+    interface "DAO<T, ID>" as DAO <<DAO>> {
+        + buscarPorId(id: ID): T
+        + buscarTodos(): List<T>
+        + guardar(entidad: T): T
+        + guardarTodos(entidades: List<T>): List<T>
+        + eliminar(entidad: T): void
+        + eliminarPorId(id: ID): void
+        + existePorId(id: ID): Boolean
+        + contar(): Long
+    }
+
+    interface CandidatoDAO <<DAO>> {
+        + buscarPorNroCandidato(nro: Long): Candidato
+        + buscarPorDocumento(doc: String): Candidato
+        + buscarPorNrosCandidato(nros: List<Long>): List<Candidato>
+        + buscarFiltrado(nombre: String, apellido: String, nro: Long): List<Candidato>
+    }
+
+    interface EvaluacionDAO <<DAO>> {
+        + buscarPorPuesto(idPuesto: Long): List<Evaluacion>
+    }
+
+    interface CuestionarioDAO <<DAO>> {
+        + buscarPorClaveAcceso(clave: String): Cuestionario
+        + buscarPorEvaluacion(idEval: Long): List<Cuestionario>
+        + buscarPorPuestoEvaluacion(idPuesto: Long): List<Cuestionario>
+        + buscarVencidos(fecha: DateTime, estados: List<EstadoCuestionario>): List<Cuestionario>
+    }
+
+    interface PreguntaDAO <<DAO>> {
+        + buscarActivasPorFactor(idFactor: Long): List<Pregunta>
+        + contarPorFactor(idFactor: Long): Long
+    }
+
+    interface PuestoDAO <<DAO>> {
+        + buscarActivos(): List<Puesto>
+    }
+
+    interface CompetenciaDAO <<DAO>> {
+        + buscarIdsCompetenciasValidas(): List<Long>
+    }
+
+    interface FactorDAO <<DAO>> {
+        + buscarPorCompetencia(idComp: Long): List<Factor>
+    }
+
+    interface EmpresaDAO <<DAO>> {
+        + buscarActivas(): List<Empresa>
+    }
+
+    interface ConsultorDAO <<DAO>> {
+        + buscarPorUsuario(usuario: String): Consultor
+    }
+
+    interface AuditoriaDAO <<DAO>> {
+    }
+}
+
+' ==========================================
+' OBJETOS DE TRANSFERENCIA DE DATOS (DTOs de Negocio)
+' ==========================================
+package "Objetos de Transferencia de Datos (DTOs)" {
+
+    class ClaveEvaluacionCandidatoDTO <<DTO>> {
+        + nroCandidato: String
+        + nombre: String
+        + apellido: String
+        + claveAcceso: String
+    }
+
+    class InicioCuestionarioDTO <<DTO>> {
+        + idCuestionario: Long
+        + totalBloques: Integer
+        + bloqueActual: Integer
+        + duracionMinutos: Integer
+        + estado: String
+        + fechaInicio: DateTime
+    }
+
+    class BloquePreguntasDTO <<DTO>> {
+        + id: Long
+        + itemsPregunta: List<ItemPreguntaDTO>
+    }
+
+    class ItemPreguntaDTO <<DTO>> {
+        + id: Long
+        + ordenVisualizacion: Integer
+        + texto: String
+        + esMultiple: Boolean
+        + itemsOpcion: List<ItemOpcionDTO>
+    }
+
+    class ItemOpcionDTO <<DTO>> {
+        + id: Long
+        + ordenVisualizacion: Integer
+        + texto: String
+        + respondido: Boolean
+    }
+
+    class ReporteOrdenMeritoDTO <<DTO>> {
+        + nombreEmpresa: String
+        + nombrePuesto: String
+        + emitidoPor: String
+        + fechaEmision: DateTime
+        + candidatosAprobados: List<CandidatoResultadoDTO>
+        + candidatosNoAprobados: List<CandidatoResultadoDTO>
+    }
+
+    class CandidatoResultadoDTO <<DTO>> {
+        + nombre: String
+        + apellido: String
+        + tipoDocumento: String
+        + nroDocumento: String
+        + nroCandidato: String
+        + estado: String
+        + puntaje: Double
+        + fechaInicio: DateTime
+        + fechaFin: DateTime
+        + cantidadAccesos: Integer
+    }
+
+    class ResumenPosicionDTO <<DTO>> {
+        + id: Long
+        + codigo: String
+        + nombrePuesto: String
+        + nombreEmpresa: String
+        + totalCandidatos: Integer
+        + evaluacionesCompletadas: Integer
+    }
+
+    class ResumenEvaluacionDTO <<DTO>> {
+        + id: Long
+        + descripcion: String
+    }
+
+    class PreguntaGeneradaIADTO <<DTO>> {
+        + nombrePregunta: String
+        + descripcion: String
+        + tipo: String
+        + texto: String
+        + opciones: List<OpcionGeneradaIADTO>
+    }
+
+    class OpcionGeneradaIADTO <<DTO>> {
+        + texto: String
+        + ponderacion: Integer
+    }
+}
+
+' ==========================================
+' ENTIDADES DE DOMINIO
+' ==========================================
+package "Dominio" {
+
+    interface Auditable {
+        + getIdentificadorAuditoria(): Long
+        + getTipoEntidad(): String
+    }
+
+    class RegistroAuditoria <<Dominio>> {
+        - fechaHora: DateTime
+        - tipoEntidad: String
+        - idEntidadEliminada: Long
+        - descripcion: String
+    }
+
+    class Consultor <<Dominio>> {
+        - nombreUsuario: String
+    }
+
+    class Candidato <<Dominio>> {
+        - nroCandidato: Long
+        - tipoDocumento: TipoDocumento
+        - nroDocumento: String
+        - nombre: String
+        - apellido: String
+        - fechaNacimiento: Date
+        - genero: Genero
+        - email: String
+        - escolaridad: String
+        - nacionalidad: String
+    }
+
+    class Empresa <<Dominio>> {
+        - nombre: String
+        - fechaBaja: Date
+    }
+
+    class Puesto <<Dominio>> {
+        - codigo: String
+        - nombre: String
+        - descripcion: String
+        - fechaBaja: Date
+    }
+
+    class CompetenciaPuesto <<Dominio>> {
+        - ponderacionRequerida: Integer
+    }
+
+    class Competencia <<Dominio>> {
+        - codigo: String
+        - nombre: String
+        - descripcion: String
+        - tipo: TipoCompetencia
+        - fechaBaja: Date
+    }
+
+    class Factor <<Dominio>> {
+        - codigo: String
+        - nombre: String
+        - descripcion: String
+        - nroOrden: Integer
+        - fechaBaja: Date
+    }
+
+    class Pregunta <<Dominio>> {
+        - version: Integer
+        - nombre: String
+        - texto: String
+        - descripcion: String
+        - tipo: TipoPregunta
+        - fechaBaja: Date
+    }
+
+    class Opcion <<Dominio>> {
+        - ordenVisualizacion: Integer
+        - ponderacion: Integer
+        - texto: String
+    }
+
+    class Evaluacion <<Dominio>> {
+        - codigo: String
+        - fechaCreacion: Date
+        - fechaCierre: Date
+        - duracionEnMinutos: Integer
+        - cantPreguntasPorBloque: Integer
+    }
+
+    class Cuestionario <<Dominio>> {
+        - claveIngreso: String
+        - fechaHoraInicio: Date
+        - fechaHoraFin: Date
+        - ultimoIngreso: Date
+        - cantidadAccesos: Integer
+        - puntajeTotal: Double
+        - estado: EstadoCuestionario
+    }
+
+    class Bloque <<Dominio>> {
+        - nroBloque: Integer
+    }
+
+    class ItemPregunta <<Dominio>> {
+        - ordenVisualizacion: Integer
+        - puntajeObtenido: Double
+    }
+
+    class ItemOpcion <<Dominio>> {
+        - respondido: Boolean
+    }
+
+    class PuntajeCompetencia <<Dominio>> {
+        - puntaje: Double
+    }
+
+    class PuntajeFactor <<Dominio>> {
+        - puntaje: Double
+    }
+}
+
+' ==========================================
+' RELACIONES ENTRE CAPAS Y ELEMENTOS
+' ==========================================
+
+' --- Herencia de DAOs (JpaRepository Base) ---
+DAO <|-- CandidatoDAO
+DAO <|-- EvaluacionDAO
+DAO <|-- CuestionarioDAO
+DAO <|-- PreguntaDAO
+DAO <|-- PuestoDAO
+DAO <|-- CompetenciaDAO
+DAO <|-- FactorDAO
+DAO <|-- EmpresaDAO
+DAO <|-- ConsultorDAO
+DAO <|-- AuditoriaDAO
+
+' --- Servicios -> DAOs ---
+ServicioSeguridad ..> ConsultorDAO : "valida usuario"
+ServicioSeguridad ..> CuestionarioDAO : "valida acceso"
+
+ServicioCandidato ..> CandidatoDAO : "consulta / persiste"
+
+ServicioEvaluacion ..> PuestoDAO : "valida puesto"
+ServicioEvaluacion ..> CompetenciaDAO : "valida ponderaciones"
+ServicioEvaluacion ..> CandidatoDAO : "obtiene candidatos"
+ServicioEvaluacion ..> EvaluacionDAO : "guarda evaluación"
+ServicioEvaluacion ..> CuestionarioDAO : "genera cuestionarios"
+ServicioEvaluacion ..> ConsultorDAO : "obtiene consultor"
+
+ServicioCuestionario ..> CuestionarioDAO : "obtiene / guarda"
+ServicioCuestionario ..> PreguntaDAO : "obtiene preguntas activas"
+
+ServicioReporte ..> PuestoDAO : "obtiene puesto"
+ServicioReporte ..> EvaluacionDAO : "obtiene evaluaciones"
+ServicioReporte ..> CuestionarioDAO : "obtiene cuestionarios y puntajes"
+
+ServicioAuditoria ..> AuditoriaDAO : "registra auditoría"
+
+' --- Servicios -> DTOs Esenciales de Negocio ---
+ServicioEvaluacion ..> ClaveEvaluacionCandidatoDTO : "retorna >"
+ServicioCuestionario ..> InicioCuestionarioDTO : "retorna >"
+ServicioCuestionario ..> BloquePreguntasDTO : "retorna >"
+ServicioReporte ..> ReporteOrdenMeritoDTO : "emite >"
+ServicioReporte ..> ResumenPosicionDTO : "retorna >"
+ServicioReporte ..> ResumenEvaluacionDTO : "retorna >"
+ServicioIA ..> PreguntaGeneradaIADTO : "genera >"
+
+' --- Estructura interna de DTOs ---
+BloquePreguntasDTO "1" *-- "1..*" ItemPreguntaDTO
+ItemPreguntaDTO "1" *-- "2..*" ItemOpcionDTO
+ReporteOrdenMeritoDTO "1" *-- "0..*" CandidatoResultadoDTO
+PreguntaGeneradaIADTO "1" *-- "2..*" OpcionGeneradaIADTO
+
+' --- DAOs -> Entidades de Dominio ---
+CandidatoDAO ..> Candidato
+EvaluacionDAO ..> Evaluacion
+CuestionarioDAO ..> Cuestionario
+PreguntaDAO ..> Pregunta
+PuestoDAO ..> Puesto
+CompetenciaDAO ..> Competencia
+FactorDAO ..> Factor
+EmpresaDAO ..> Empresa
+ConsultorDAO ..> Consultor
+AuditoriaDAO ..> RegistroAuditoria
+
+' --- Auditoría y Dominio ---
+Empresa ..|> Auditable
+Puesto ..|> Auditable
+Competencia ..|> Auditable
+Factor ..|> Auditable
+Pregunta ..|> Auditable
+
+RegistroAuditoria "*" --> "1" Consultor : "realizado por"
+
+' --- Relaciones del Modelo de Dominio ---
+Empresa "1" *-- "0..*" Puesto
+Consultor "1" <-- "*" Evaluacion : "crea"
+Puesto "1" <-- "*" Evaluacion : "examina"
+
+Puesto "1" *-- "1..*" CompetenciaPuesto
+CompetenciaPuesto "*" --> "1" Competencia
+
+Competencia "1" *-- "1..*" Factor
+Factor "1" *-- "0..*" Pregunta
+Pregunta "1" *-- "2..*" Opcion
+
+Evaluacion "1" *-- "0..*" Cuestionario
+Candidato "1" <-- "*" Cuestionario : "pertenece a"
+
+Cuestionario "1" *-- "1..*" Bloque
+Bloque "1" *-- "1..*" ItemPregunta
+ItemPregunta "*" --> "1" Pregunta
+
+ItemPregunta "1" *-- "2..*" ItemOpcion
+ItemOpcion "*" --> "1" Opcion
+
+Cuestionario "1" *-- "0..*" PuntajeCompetencia
+PuntajeCompetencia "*" --> "1" Competencia
+PuntajeCompetencia "1" *-- "1..*" PuntajeFactor
+PuntajeFactor "*" --> "1" Factor
+
+@enduml
