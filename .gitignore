@@ -2,6 +2,14 @@
 # UNIFIED GITIGNORE - CAPITAL HUMANO MONOREPO
 # ==========================================
 
+# --- Environment files & Secrets ---
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+!**/.env.example
+
 # --- OS & Editors ---
 .DS_Store
 Thumbs.db
@@ -32,7 +40,6 @@ backend/HELP.md
 **/target/
 **/bin/
 *.class
-backend/src/main/resources/application.properties
 
 # --- Frontend (Node.js / React / Vite) ---
 frontend/node_modules/
@@ -40,6 +47,7 @@ frontend/dist/
 frontend/dist-ssr/
 frontend/*.local
 frontend/.env.local
+frontend/.env
 frontend/.env.*.local
 logs/
 *.log
