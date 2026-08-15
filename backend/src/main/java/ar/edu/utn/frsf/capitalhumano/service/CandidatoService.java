@@ -1,128 +1,114 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.CandidatoCsvRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.CandidatoResumenResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
+import ar.edu.utn.frsf.capitalhumano.mapper.CandidatoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Candidato;
-import ar.edu.utn.frsf.capitalhumano.model.enums.TipoDocumento;
 import ar.edu.utn.frsf.capitalhumano.model.enums.Genero;
+import ar.edu.utn.frsf.capitalhumano.model.enums.TipoDocumento;
 import ar.edu.utn.frsf.capitalhumano.repository.CandidatoRepository;
-
+import ar.edu.utn.frsf.capitalhumano.specification.CandidatoSpecification;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 @Service
 public class CandidatoService {
 
     private final CandidatoRepository candidatoRepository;
+    private final CandidatoMapper candidatoMapper;
 
-    public CandidatoService(CandidatoRepository candidatoRepository) {
+    public CandidatoService(CandidatoRepository candidatoRepository, CandidatoMapper candidatoMapper) {
         this.candidatoRepository = candidatoRepository;
+        this.candidatoMapper = candidatoMapper;
     }
 
-    public Page<CandidatoResumenResponse> obtenerCandidatosPaginados(String nombre, String apellido,
-            Long numeroCandidato,
-            Pageable pageable) {
-        return candidatoRepository.findSummaryByFilters(nombre, apellido, numeroCandidato, pageable);
+    public Page<CandidatoDTO.Resumen> obtenerCandidatosPaginados(
+            String nombre, String apellido, Long numeroCandidato, Pageable pageable) {
+
+        Specification<Candidato> spec = CandidatoSpecification.conFiltros(nombre, apellido, numeroCandidato);
+        Page<Candidato> candidatosPage = candidatoRepository.findAll(spec, pageable);
+        return candidatoMapper.aPaginaResumen(candidatosPage);
     }
 
     @Transactional
-    public List<CandidatoResumenResponse> procesarCandidatosCsv(MultipartFile archivo) {
-        List<CandidatoResumenResponse> candidatosProcesados = new ArrayList<>();
+    public List<CandidatoDTO.Resumen> procesarCandidatosCsv(MultipartFile file) {
+        List<CandidatoDTO.Resumen> candidatosProcesados = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        try {
+        try (InputStream is = file.getInputStream()) {
             CsvMapper csvMapper = new CsvMapper();
             csvMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
             CsvSchema schema = CsvSchema.emptySchema().withHeader();
 
-            MappingIterator<CandidatoCsvRequest> iterator = csvMapper.readerFor(CandidatoCsvRequest.class)
+            MappingIterator<CandidatoDTO.ImportarCsv> iterator = csvMapper.readerFor(CandidatoDTO.ImportarCsv.class)
                     .with(schema)
-                    .readValues(archivo.getInputStream());
+                    .readValues(is);
 
-            List<CandidatoCsvRequest> csvCandidates = iterator.readAll();
+            while (iterator.hasNext()) {
+                CandidatoDTO.ImportarCsv csvDto = iterator.next();
 
-            // 1. Extraemos todos los números de candidato del CSV de una pasada
-            List<Long> candidateNumbers = csvCandidates.stream()
-                    .map(dto -> Long.parseLong(dto.candidateNumber()))
-                    .collect(Collectors.toList());
+                if (csvDto.numeroDocumento() == null || csvDto.tipoDocumento() == null) {
+                    continue;
+                }
 
-            // 2. Buscamos en la base de datos TODOS los que ya existen con una sola consulta
-            List<Candidato> existingCandidates = candidatoRepository.findByCandidateNumberIn(candidateNumbers);
+                Optional<Candidato> existingCandidateOpt = candidatoRepository.findByNumeroDocumento(csvDto.numeroDocumento());
 
-            // 3. Armamos un diccionario en memoria (Map) para buscar rapidísimo sin tocar la DB
-            Map<Long, Candidato> existingMap = existingCandidates.stream()
-                    .collect(Collectors.toMap(c -> c.getCandidateNumber(), c -> c));
+                if (existingCandidateOpt.isPresent()) {
+                    Candidato existing = existingCandidateOpt.get();
+                    if (csvDto.nombre() != null) existing.setNombre(csvDto.nombre());
+                    if (csvDto.apellido() != null) existing.setApellido(csvDto.apellido());
+                    if (csvDto.email() != null) existing.setEmail(csvDto.email());
+                    if (csvDto.escolaridad() != null) existing.setEscolaridad(csvDto.escolaridad());
+                    if (csvDto.nacionalidad() != null) existing.setNacionalidad(csvDto.nacionalidad());
 
-            List<Candidato> newCandidatesToSave = new ArrayList<>();
-
-            // 4. Recorremos el CSV separando los candidatos nuevos de los viejos
-            for (CandidatoCsvRequest csvDto : csvCandidates) {
-                Long candidateNumber = Long.parseLong(csvDto.candidateNumber());
-
-                if (existingMap.containsKey(candidateNumber)) {
-                    // Ya existe: lo agregamos directamente a la lista de respuesta
-                    Candidato existing = existingMap.get(candidateNumber);
-                    candidatosProcesados.add(new CandidatoResumenResponse(
-                            existing.getId(), existing.getFirstName(), existing.getLastName(),
-                            existing.getCandidateNumber()));
+                    candidatoRepository.save(existing);
+                    candidatosProcesados.add(candidatoMapper.aResumen(existing));
                 } else {
-                    // Es nuevo: armamos el objeto pero NO lo guardamos todavía
                     Candidato newCandidate = new Candidato();
-                    newCandidate.setCandidateNumber(candidateNumber);
-                    newCandidate.setDocumentType(TipoDocumento.valueOf(csvDto.documentType().toUpperCase()));
-                    newCandidate.setDocumentNumber(csvDto.documentNumber());
-                    newCandidate.setFirstName(csvDto.firstName());
-                    newCandidate.setLastName(csvDto.lastName());
-                    newCandidate.setBirthDate(LocalDate.parse(csvDto.birthDate(), formatter));
-                    newCandidate.setGender(Genero.valueOf(csvDto.gender().toUpperCase()));
+                    if (csvDto.numeroCandidato() != null && !csvDto.numeroCandidato().isBlank()) {
+                        newCandidate.setNumeroCandidato(Long.parseLong(csvDto.numeroCandidato()));
+                    }
+                    newCandidate.setTipoDocumento(TipoDocumento.valueOf(csvDto.tipoDocumento().toUpperCase()));
+                    newCandidate.setNumeroDocumento(csvDto.numeroDocumento());
+                    newCandidate.setNombre(csvDto.nombre());
+                    newCandidate.setApellido(csvDto.apellido());
+                    if (csvDto.fechaNacimiento() != null && !csvDto.fechaNacimiento().isBlank()) {
+                        newCandidate.setFechaNacimiento(LocalDate.parse(csvDto.fechaNacimiento(), formatter));
+                    }
+                    if (csvDto.genero() != null && !csvDto.genero().isBlank()) {
+                        newCandidate.setGenero(Genero.valueOf(csvDto.genero().toUpperCase()));
+                    }
                     newCandidate.setEmail(csvDto.email());
+                    newCandidate.setEscolaridad(csvDto.escolaridad());
+                    newCandidate.setNacionalidad(csvDto.nacionalidad());
 
-                    if (csvDto.educationLevel() != null && !csvDto.educationLevel().isBlank()) {
-                        newCandidate.setEducationLevel(csvDto.educationLevel());
-                    }
-                    if (csvDto.nationality() != null && !csvDto.nationality().isBlank()) {
-                        newCandidate.setNationality(csvDto.nationality());
-                    }
-
-                    // Lo mandamos a la lista de espera
-                    newCandidatesToSave.add(newCandidate);
+                    Candidato saved = candidatoRepository.save(newCandidate);
+                    candidatosProcesados.add(candidatoMapper.aResumen(saved));
                 }
             }
-
-            // 5. Guardamos todos los candidatos nuevos en un solo saque usando saveAll
-            if (!newCandidatesToSave.isEmpty()) {
-                List<Candidato> savedCandidates = candidatoRepository.saveAll(newCandidatesToSave);
-                for (Candidato saved : savedCandidates) {
-                    candidatosProcesados.add(new CandidatoResumenResponse(
-                            saved.getId(), saved.getFirstName(), saved.getLastName(), saved.getCandidateNumber()));
-                }
-            }
-
         } catch (Exception e) {
-            throw new RuntimeException("Error procesando el archivo CSV: " + e.getMessage());
+            throw new RuntimeException("Error al procesar el archivo CSV: " + e.getMessage(), e);
         }
 
-        // Devolvemos la lista completa (los que ya estaban + los recién creados)
         return candidatosProcesados;
     }
 
-    public Candidato buscarPorNumeroDocumento(String numeroDocumento) {
-        return candidatoRepository.findByDocumentNumber(numeroDocumento)
-                .orElseThrow(
-                        () -> new RuntimeException("Candidato con documento " + numeroDocumento + " no encontrado"));
+    public Candidato buscarPorNumeroDocumento(String nroDocumento) {
+        return candidatoRepository.findByNumeroDocumento(nroDocumento)
+                .orElseThrow(() -> new RuntimeException("Candidato no encontrado para el documento: " + nroDocumento));
     }
 }

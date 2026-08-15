@@ -32,86 +32,29 @@ public class Pregunta {
     @Column(nullable = false)
     private Integer version;
 
-    @Column(nullable = false)
-    private String name;
+    @Column(name = "nombre", nullable = false)
+    private String nombre;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String text;
+    @Column(name = "texto", columnDefinition = "TEXT", nullable = false)
+    private String texto;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "descripcion", columnDefinition = "TEXT")
+    private String descripcion;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TipoPregunta type;
+    @Column(name = "tipo", nullable = false)
+    private TipoPregunta tipo;
 
     // Se actualiza automáticamente la fecha de actualización cada vez que se modifica la entidad
     @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    @Column(name = "fecha_modificacion")
+    private LocalDateTime fechaModificacion;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
 
     // Relación One-To-Many con las opciones
-    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "pregunta", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
-    private List<Opcion> options = new ArrayList<>();
-
-    // Métodos en español
-    public String getNombre() {
-        return name;
-    }
-
-    public void setNombre(String nombre) {
-        this.name = nombre;
-    }
-
-    public String getTexto() {
-        return text;
-    }
-
-    public void setTexto(String texto) {
-        this.text = texto;
-    }
-
-    public String getDescripcion() {
-        return description;
-    }
-
-    public void setDescripcion(String descripcion) {
-        this.description = descripcion;
-    }
-
-    public TipoPregunta getTipo() {
-        return type;
-    }
-
-    public void setTipo(TipoPregunta tipo) {
-        this.type = tipo;
-    }
-
-    public LocalDateTime getFechaModificacion() {
-        return updatedAt;
-    }
-
-    public void setFechaModificacion(LocalDateTime fechaModificacion) {
-        this.updatedAt = fechaModificacion;
-    }
-
-    public LocalDateTime getFechaBaja() {
-        return deletedAt;
-    }
-
-    public void setFechaBaja(LocalDateTime fechaBaja) {
-        this.deletedAt = fechaBaja;
-    }
-
-    public List<Opcion> getOpciones() {
-        return options;
-    }
-
-    public void setOpciones(List<Opcion> opciones) {
-        this.options = opciones;
-    }
+    private List<Opcion> opciones = new ArrayList<>();
 }

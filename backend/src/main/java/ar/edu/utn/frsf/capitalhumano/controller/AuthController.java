@@ -1,14 +1,11 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.CandidatoLoginRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.CandidatoLoginResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
 import ar.edu.utn.frsf.capitalhumano.model.Consultor;
 import ar.edu.utn.frsf.capitalhumano.repository.ConsultorRepository;
 import ar.edu.utn.frsf.capitalhumano.security.JwtService;
 import ar.edu.utn.frsf.capitalhumano.security.SecurityService;
-import com.fasterxml.jackson.annotation.JsonAlias;
-
-import java.util.Map;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +13,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/autenticacion")
@@ -26,58 +25,57 @@ public class AuthController {
     private final SecurityService securityService;
     private final ConsultorRepository consultorRepository;
 
-    public AuthController(AuthenticationManager authenticationManager, JwtService jwtService,
-            ConsultorRepository consultorRepository,
-            SecurityService securityService) {
+    public AuthController(AuthenticationManager authenticationManager,
+                          JwtService jwtService,
+                          ConsultorRepository consultorRepository,
+                          SecurityService securityService) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.securityService = securityService;
         this.consultorRepository = consultorRepository;
     }
 
-    public record IniciarSesionRequest(
-            @JsonAlias({"username", "user"}) String usuario,
-            @JsonAlias({"password", "clave", "pass"}) String contrasenia) {
-    }
+    public record IniciarSesion(
+            String usuario,
+            String contrasenia
+    ) {}
 
     @PostMapping("/iniciar-sesion")
-    public ResponseEntity<?> iniciarSesion(@RequestBody IniciarSesionRequest request) {
-        String username = request.usuario();
-        String password = request.contrasenia();
-
-        if (username == null || password == null) {
+    public ResponseEntity<?> iniciarSesion(@Valid @RequestBody IniciarSesion peticion) {
+        if (peticion.usuario() == null || peticion.contrasenia() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Debe proporcionar usuario y contraseña"));
         }
 
         try {
-            // Validamos credenciales contra LDAP
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(peticion.usuario(), peticion.contrasenia()));
         } catch (org.springframework.security.core.AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Usuario o contraseña incorrectos"));
         }
 
-        // JIT PROVISIONING: Buscamos al consultor en la BD local. Si no existe, lo creamos
-        Consultor consultant = consultorRepository.findByUsername(username).orElseGet(() -> {
-            Consultor newConsultant = new Consultor();
-            newConsultant.setUsername(username);
-            return consultorRepository.save(newConsultant);
+        Consultor consultor = consultorRepository.findByUsername(peticion.usuario()).orElseGet(() -> {
+            Consultor nuevo = new Consultor();
+            nuevo.setUsername(peticion.usuario());
+            return consultorRepository.save(nuevo);
         });
 
-        String accessToken = jwtService.generarToken(consultant.getUsername(), "CONSULTANT");
+        String accessToken = jwtService.generarToken(consultor.getUsername(), "CONSULTANT");
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE,
-                        jwtService.generarJwtCookie(accessToken).toString())
-                .body(Map.of("message", "Consultor autenticado correctamente", "user",
-                        Map.of("username", consultant.getUsername(), "role", "CONSULTANT")));
+                .header(HttpHeaders.SET_COOKIE, jwtService.generarJwtCookie(accessToken).toString())
+                .body(Map.of(
+                        "message", "Consultor autenticado correctamente",
+                        "user", Map.of("username", consultor.getUsername(), "role", "CONSULTANT")
+                ));
     }
 
     @PostMapping("/cerrar-sesion")
     public ResponseEntity<?> cerrarSesion() {
         String cleanCookie = jwtService.obtenerCleanJwtCookie().toString();
-        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cleanCookie)
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cleanCookie)
                 .body(Map.of("message", "Sesión cerrada"));
     }
 
@@ -91,23 +89,20 @@ public class AuthController {
         String role = authentication.getAuthorities().iterator().next().getAuthority();
 
         Object profile = securityService.obtenerPerfilUsuario(principalName, role);
-
         return ResponseEntity.ok(profile);
     }
 
     @PostMapping("/candidato/iniciar-sesion")
-    public ResponseEntity<CandidatoLoginResponse> iniciarSesionCandidato(@RequestBody CandidatoLoginRequest request) {
+    public ResponseEntity<CandidatoDTO.SesionIniciada> iniciarSesionCandidato(@Valid @RequestBody CandidatoDTO.IniciarSesion peticion) {
         try {
-            Map<String, Object> response = securityService.autenticarCandidato(request);
-
-            Long questionnaireId = (Long) response.get("questionnaireId");
+            Map<String, Object> response = securityService.autenticarCandidato(peticion);
+            Long idCuestionario = (Long) response.get("idCuestionario");
             String token = (String) response.get("token");
 
-            CandidatoLoginResponse candidateLoginResponse = new CandidatoLoginResponse(questionnaireId);
+            CandidatoDTO.SesionIniciada body = new CandidatoDTO.SesionIniciada(idCuestionario);
             return ResponseEntity.ok()
                     .header(HttpHeaders.SET_COOKIE, jwtService.generarJwtCookie(token).toString())
-                    .body(candidateLoginResponse);
-
+                    .body(body);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }

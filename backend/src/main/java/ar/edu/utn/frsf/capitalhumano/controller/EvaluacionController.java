@@ -1,8 +1,9 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.GenerarEvaluacionRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.ClaveEvaluacionResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.EvaluacionDTO;
 import ar.edu.utn.frsf.capitalhumano.service.EvaluacionService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,8 +20,8 @@ public class EvaluacionController {
     }
 
     @PostMapping("/generar")
-    public ResponseEntity<List<ClaveEvaluacionResponse>> generarEvaluacion(@RequestBody GenerarEvaluacionRequest peticion) {
-        List<ClaveEvaluacionResponse> respuesta = evaluacionService.generarEvaluacion(peticion);
-        return ResponseEntity.ok(respuesta);
+    public ResponseEntity<List<EvaluacionDTO.ClaveGenerada>> generar(@Valid @RequestBody EvaluacionDTO.Generar peticion) {
+        List<EvaluacionDTO.ClaveGenerada> claves = evaluacionService.generarEvaluacion(peticion);
+        return ResponseEntity.status(HttpStatus.CREATED).body(claves);
     }
 }

@@ -1,0 +1,24 @@
+import { useNavigate } from 'react-router-dom';
+import { Button } from 'primereact/button';
+
+export const NoEncontrado = () => {
+    const navigate = useNavigate();
+
+    return (
+        <div className="flex flex-column align-items-center justify-content-center min-h-screen text-center p-4 surface-ground">
+            <h1 className="text-7xl font-bold text-color m-0">404</h1>
+            <p className="text-xl text-color-secondary m-0 mt-3 mb-5">
+                La página o recurso que estás buscando no existe en el sistema.
+            </p>
+            <Button
+                label="Volver atrás"
+                icon="pi pi-arrow-left"
+                onClick={() => navigate(-1)}
+                size="large"
+            />
+        </div>
+    );
+};
+
+export const NotFound = NoEncontrado;
+export default NoEncontrado;

@@ -1,33 +1,33 @@
 package ar.edu.utn.frsf.capitalhumano.repository;
 
+import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
+import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+public interface CuestionarioRepository extends JpaRepository<Cuestionario, Long>, JpaSpecificationExecutor<Cuestionario> {
 
-import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Cuestionario;
-
-public interface CuestionarioRepository extends JpaRepository<Cuestionario, Long> {
-
-    Optional<Cuestionario> findByAccessKey(String accessKey);
+    Optional<Cuestionario> findByClaveAcceso(String claveAcceso);
 
     @Query("""
         SELECT q
         FROM Cuestionario q
-        WHERE q.evaluation.closeDate < :now
-          AND q.state IN (:states)
+        WHERE q.evaluacion.fechaCierre < :now
+          AND q.estado IN (:states)
     """)
     List<Cuestionario> findExpiredQuestionnaires(
             @Param("now") LocalDateTime now,
             @Param("states") List<EstadoCuestionario> states);
 
     // Trae los cuestionarios de una evaluación particular
-    List<Cuestionario> findByEvaluationId(Long evaluationId);
+    List<Cuestionario> findByEvaluacionId(Long evaluacionId);
 
     // Trae los cuestionarios de TODAS las evaluaciones de un puesto particular
-    List<Cuestionario> findByEvaluationPositionId(Long positionId);
+    List<Cuestionario> findByEvaluacionPuestoId(Long puestoId);
 }

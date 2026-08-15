@@ -1,24 +1,31 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import java.util.List;
+import ar.edu.utn.frsf.capitalhumano.dto.ComunDTO;
+import ar.edu.utn.frsf.capitalhumano.mapper.FactorMapper;
+import ar.edu.utn.frsf.capitalhumano.model.Factor;
+import ar.edu.utn.frsf.capitalhumano.repository.FactorRepository;
 import org.springframework.stereotype.Service;
 
-import ar.edu.utn.frsf.capitalhumano.dto.response.SelectItemResponse;
-import ar.edu.utn.frsf.capitalhumano.repository.FactorRepository;
+import java.util.List;
 
 @Service
 public class FactorService {
 
     private final FactorRepository factorRepository;
+    private final FactorMapper factorMapper;
 
-    public FactorService(FactorRepository factorRepository) {
+    public FactorService(FactorRepository factorRepository, FactorMapper factorMapper) {
         this.factorRepository = factorRepository;
+        this.factorMapper = factorMapper;
     }
 
-    public List<SelectItemResponse> obtenerFactoresParaSelect(Long idCompetencia) {
+    public List<ComunDTO.ItemSeleccion> obtenerFactoresParaSelect(Long idCompetencia) {
+        List<Factor> factores;
         if (idCompetencia != null) {
-            return factorRepository.findForSelectByCompetencyId(idCompetencia);
+            factores = factorRepository.findByCompetenciaIdAndFechaBajaIsNullOrderByNombreAsc(idCompetencia);
+        } else {
+            factores = factorRepository.findByFechaBajaIsNullOrderByNombreAsc();
         }
-        return factorRepository.findAllForSelect();
+        return factorMapper.aItemsSeleccion(factores);
     }
 }

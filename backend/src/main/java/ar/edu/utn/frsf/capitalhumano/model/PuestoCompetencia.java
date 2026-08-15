@@ -12,39 +12,15 @@ public class PuestoCompetencia {
     private PuestoCompetenciaId id = new PuestoCompetenciaId();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("positionId")
-    @JoinColumn(name = "position_id")
-    private Puesto position;
+    @MapsId("puestoId")
+    @JoinColumn(name = "puesto_id")
+    private Puesto puesto;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("competencyId")
-    @JoinColumn(name = "competency_id")
-    private Competencia competency;
+    @MapsId("competenciaId")
+    @JoinColumn(name = "competencia_id")
+    private Competencia competencia;
 
     @Column(name = "ponderacion_requerida")
-    private Integer weightingRequired;
-
-    public Puesto getPuesto() {
-        return position;
-    }
-
-    public void setPuesto(Puesto puesto) {
-        this.position = puesto;
-    }
-
-    public Competencia getCompetencia() {
-        return competency;
-    }
-
-    public void setCompetencia(Competencia competencia) {
-        this.competency = competencia;
-    }
-
-    public Integer getPonderacionRequerida() {
-        return weightingRequired;
-    }
-
-    public void setPonderacionRequerida(Integer ponderacionRequerida) {
-        this.weightingRequired = ponderacionRequerida;
-    }
+    private Integer ponderacionRequerida;
 }

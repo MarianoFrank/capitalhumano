@@ -1,5 +1,7 @@
 package ar.edu.utn.frsf.capitalhumano.exception;
 
+import ar.edu.utn.frsf.capitalhumano.dto.ApiErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,38 +18,64 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // Maneja errores de argumentos inválidos, parámetros incorrectos o validaciones
+    // de precondición en la lógica de negocio (HTTP 400 Bad Request)
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException ex) {
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(
+            IllegalArgumentException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
         String errorMessage = ex.getMessage() != null ? ex.getMessage() : "Argumento inválido.";
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", errorMessage));
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                errorMessage,
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
     }
 
+    // Maneja violaciones de restricciones de integridad en base de datos (claves
+    // únicas duplicadas, claves foráneas, etc.) (HTTP 409 Conflict)
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<?> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
-                "error", "El registro ya existe o hay un conflicto con los datos ingresados."));
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                "El registro ya existe o hay un conflicto con los datos ingresados.",
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
     }
 
-    // validation errors for @Valid annotated request bodies
+    // Maneja fallos de validación de Bean Validation (@Valid, @NotBlank, @NotNull,
+    // etc.) en los cuerpos de petición (@RequestBody) (HTTP 400 Bad Request)
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> handleValidationExceptions(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
         Map<String, String> details = new HashMap<>();
 
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
+        ex.getBindingResult().getAllErrors().forEach(error -> {
             String field = ((FieldError) error).getField();
             String message = error.getDefaultMessage();
             details.put(field, message);
         });
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", "Hay errores en los datos ingresados.",
-                "details", details));
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                "Hay errores en los datos ingresados.",
+                request.getRequestURI(),
+                details);
+        return ResponseEntity.status(status).body(body);
     }
 
-    // validation errors for @Valid annotated method parameters
+    // Maneja fallos de validación en parámetros directos de métodos de controlador
+    // (@RequestParam, @PathVariable, etc.) (HTTP 400 Bad Request)
     @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<?> handleMethodValidationException(HandlerMethodValidationException ex) {
+    public ResponseEntity<ApiErrorResponse> handleMethodValidationException(
+            HandlerMethodValidationException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
         Map<String, String> details = new HashMap<>();
 
         ex.getParameterValidationResults().forEach(validationResult -> {
@@ -56,22 +84,41 @@ public class GlobalExceptionHandler {
             details.put(paramName != null ? paramName : "param", message);
         });
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", "Hay errores de validación en la petición.",
-                "details", details));
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                "Hay errores de validación en la petición.",
+                request.getRequestURI(),
+                details);
+        return ResponseEntity.status(status).body(body);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<?> handleRuntimeException(RuntimeException ex) {
-        String errorMessage = ex.getMessage() != null ? ex.getMessage() : "Ocurrió un error inesperado en el servidor.";
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", errorMessage));
-    }
-
+    // Maneja solicitudes con JSON malformado, tipos de datos incompatibles o cuerpo
+    // de solicitud no legible (HTTP 400 Bad Request)
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<?> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
-        String errorMessage = "El cuerpo de la solicitud no es legible o tiene un formato incorrecto.";
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", errorMessage));
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                "El cuerpo de la solicitud no es legible o tiene un formato incorrecto.",
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
+    }
+
+    // Maneja cualquier otra excepción no controlada en tiempo de ejecución o error
+    // general del servidor (HTTP 500 Internal Server Error)
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiErrorResponse> handleRuntimeException(
+            RuntimeException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        String errorMessage = ex.getMessage() != null ? ex.getMessage() : "Ocurrió un error inesperado en el servidor.";
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                errorMessage,
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
     }
 }

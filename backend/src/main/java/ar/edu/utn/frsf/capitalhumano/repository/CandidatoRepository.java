@@ -1,39 +1,17 @@
 package ar.edu.utn.frsf.capitalhumano.repository;
 
-import ar.edu.utn.frsf.capitalhumano.dto.response.CandidatoResumenResponse;
 import ar.edu.utn.frsf.capitalhumano.model.Candidato;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface CandidatoRepository extends JpaRepository<Candidato, Long> {
+public interface CandidatoRepository extends JpaRepository<Candidato, Long>, JpaSpecificationExecutor<Candidato> {
 
-    Optional<Candidato> findByCandidateNumber(Long candidateNumber);
+    Optional<Candidato> findByNumeroCandidato(Long numeroCandidato);
 
-    Optional<Candidato> findByDocumentNumber(String documentNumber);
+    Optional<Candidato> findByNumeroDocumento(String numeroDocumento);
 
-    List<Candidato> findByCandidateNumberIn(List<Long> candidateNumbers);
-
-    @Query("""
-        SELECT new ar.edu.utn.frsf.capitalhumano.dto.response.CandidatoResumenResponse(
-            c.id,
-            c.firstName,
-            c.lastName,
-            c.candidateNumber
-        )
-        FROM Candidato c
-        WHERE (:firstName IS NULL OR LOWER(c.firstName) LIKE LOWER(CONCAT('%', CAST(:firstName AS string), '%')))
-          AND (:lastName IS NULL OR LOWER(c.lastName) LIKE LOWER(CONCAT('%', CAST(:lastName AS string), '%')))
-          AND (:candidateNumber IS NULL OR c.candidateNumber = :candidateNumber)
-    """)
-    Page<CandidatoResumenResponse> findSummaryByFilters(
-            @Param("firstName") String firstName,
-            @Param("lastName") String lastName,
-            @Param("candidateNumber") Long candidateNumber,
-            Pageable pageable);
+    List<Candidato> findByNumeroCandidatoIn(List<Long> numerosCandidatos);
 }

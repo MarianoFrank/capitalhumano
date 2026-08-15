@@ -1,17 +1,27 @@
 import { Outlet, Navigate } from 'react-router-dom';
-import { useAutenticacion } from '../hooks/useAutenticacion';
+import { useAutenticacion } from '../context/ContextoApp';
 
 export default function RutaProtegida({ requerirConsultor = false, requireConsultant = false }) {
     const { estaAutenticado, esConsultor, cargando } = useAutenticacion();
 
-    if (cargando) return <div className="p-4 text-center text-color-secondary">Cargando sesión...</div>;
+    if (cargando) {
+        return (
+            <div className="flex align-items-center justify-content-center min-h-screen">
+                <i className="pi pi-spin pi-spinner text-4xl text-primary"></i>
+            </div>
+        );
+    }
 
     // Si no está autenticado, redirigir al login
-    if (!estaAutenticado) return <Navigate to="/login" replace />;
+    if (!estaAutenticado) {
+        return <Navigate to="/iniciar-sesion" replace />;
+    }
 
-    // Si requiere ser consultor y no lo es, redirigir
+    // Si requiere rol consultor y no lo es, redirigir a inicio
     const necesitaConsultor = requerirConsultor || requireConsultant;
-    if (necesitaConsultor && !esConsultor) return <Navigate to="/" replace />;
+    if (necesitaConsultor && !esConsultor) {
+        return <Navigate to="/" replace />;
+    }
 
     return <Outlet />;
 }

@@ -1,6 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
-import ar.edu.utn.frsf.capitalhumano.dto.response.PuestoSelectResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.PuestoDTO;
 import ar.edu.utn.frsf.capitalhumano.service.PuestoService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +19,9 @@ public class PuestoController {
         this.puestoService = puestoService;
     }
 
-    @GetMapping("/seleccion")
-    public ResponseEntity<List<PuestoSelectResponse>> obtenerPuestosParaSelect() {
-        return ResponseEntity.ok(puestoService.obtenerPuestosParaSelect());
+    @GetMapping("/select")
+    public ResponseEntity<List<PuestoDTO.Seleccion>> obtenerParaSelect() {
+        List<PuestoDTO.Seleccion> puestos = puestoService.obtenerPuestosParaSelect();
+        return ResponseEntity.ok(puestos);
     }
 }

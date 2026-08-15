@@ -1,6 +1,13 @@
 import { useState, useCallback } from 'react';
 
-export const useTablasPaginadas = ({ campoOrdenPorDefecto = 'id', ordenPorDefecto = 1, filasPorDefecto = 20, defaultSortField = 'id', defaultSortOrder = 1, defaultRows = 20 } = {}) => {
+export const useTablasPaginadas = ({
+    campoOrdenPorDefecto = 'id',
+    ordenPorDefecto = 1,
+    filasPorDefecto = 20,
+    defaultSortField = 'id',
+    defaultSortOrder = 1,
+    defaultRows = 20
+} = {}) => {
     const campoInicial = campoOrdenPorDefecto !== 'id' ? campoOrdenPorDefecto : defaultSortField;
     const ordenInicial = ordenPorDefecto !== 1 ? ordenPorDefecto : defaultSortOrder;
     const filasIniciales = filasPorDefecto !== 20 ? filasPorDefecto : defaultRows;
@@ -15,16 +22,15 @@ export const useTablasPaginadas = ({ campoOrdenPorDefecto = 'id', ordenPorDefect
     });
 
     const alCambiarPagina = useCallback((e) => {
-        setParametrosPaginacion(prev => ({ ...prev, first: e.first, rows: e.rows, page: e.page }));
+        setParametrosPaginacion((prev) => ({ ...prev, first: e.first, rows: e.rows, page: e.page }));
     }, []);
 
     const alCambiarOrden = useCallback((e) => {
-        setParametrosPaginacion(prev => ({ ...prev, sortField: e.sortField, sortOrder: e.sortOrder }));
+        setParametrosPaginacion((prev) => ({ ...prev, sortField: e.sortField, sortOrder: e.sortOrder }));
     }, []);
 
-    // Para reiniciar la paginación al filtrar
     const reiniciarPaginacion = useCallback(() => {
-        setParametrosPaginacion(prev => ({ ...prev, first: 0, page: 0 }));
+        setParametrosPaginacion((prev) => ({ ...prev, first: 0, page: 0 }));
     }, []);
 
     return {

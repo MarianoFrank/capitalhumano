@@ -1,6 +1,5 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.*;
 import ar.edu.utn.frsf.capitalhumano.event.CuestionarioCompletadoEvent;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;

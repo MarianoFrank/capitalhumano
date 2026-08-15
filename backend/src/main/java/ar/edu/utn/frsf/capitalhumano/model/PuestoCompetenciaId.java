@@ -2,8 +2,10 @@ package ar.edu.utn.frsf.capitalhumano.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 
@@ -11,27 +13,13 @@ import java.io.Serializable;
 @Embeddable
 @Data
 @EqualsAndHashCode
+@NoArgsConstructor
+@AllArgsConstructor
 public class PuestoCompetenciaId implements Serializable {
 
     @Column(name = "position_id")
-    private Long positionId;
+    private Long puestoId;
 
     @Column(name = "competency_id")
-    private Long competencyId;
-
-    public Long getPuestoId() {
-        return positionId;
-    }
-
-    public void setPuestoId(Long puestoId) {
-        this.positionId = puestoId;
-    }
-
-    public Long getCompetenciaId() {
-        return competencyId;
-    }
-
-    public void setCompetenciaId(Long competenciaId) {
-        this.competencyId = competenciaId;
-    }
+    private Long competenciaId;
 }

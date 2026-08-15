@@ -1,21 +1,20 @@
 package ar.edu.utn.frsf.capitalhumano.security;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.CandidatoLoginRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.PerfilCandidatoResponse;
-import ar.edu.utn.frsf.capitalhumano.dto.response.PerfilConsultorResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
+import ar.edu.utn.frsf.capitalhumano.dto.ComunDTO;
+import ar.edu.utn.frsf.capitalhumano.mapper.CandidatoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Candidato;
+import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
 import ar.edu.utn.frsf.capitalhumano.service.CandidatoService;
-
-import java.time.LocalDateTime;
-import java.util.Map;
-
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.Map;
 
 @Component("securityService")
 public class SecurityService {
@@ -24,13 +23,18 @@ public class SecurityService {
     private final CandidatoService candidatoService;
     private final LdapService ldapService;
     private final JwtService jwtService;
+    private final CandidatoMapper candidatoMapper;
 
-    public SecurityService(CuestionarioRepository cuestionarioRepository, CandidatoService candidatoService,
-            LdapService ldapService, JwtService jwtService) {
+    public SecurityService(CuestionarioRepository cuestionarioRepository,
+                           CandidatoService candidatoService,
+                           LdapService ldapService,
+                           JwtService jwtService,
+                           CandidatoMapper candidatoMapper) {
         this.cuestionarioRepository = cuestionarioRepository;
         this.candidatoService = candidatoService;
         this.ldapService = ldapService;
         this.jwtService = jwtService;
+        this.candidatoMapper = candidatoMapper;
     }
 
     // nombrePrincipal para el candidato es su documento, para el consultor es su username de LDAP
@@ -39,8 +43,7 @@ public class SecurityService {
 
         if (rolLimpio.equals("CANDIDATE") || rolLimpio.equals("CANDIDATO")) {
             Candidato candidato = candidatoService.buscarPorNumeroDocumento(nombrePrincipal);
-
-            return new PerfilCandidatoResponse(nombrePrincipal, rolLimpio, candidato.getNombre(), candidato.getApellido());
+            return candidatoMapper.aPerfil(candidato, nombrePrincipal, rolLimpio);
         } else {
             Map<String, Object> ldapData = ldapService.obtenerPerfilUsuario(nombrePrincipal);
             if (ldapData == null) {
@@ -51,7 +54,7 @@ public class SecurityService {
             String apellido = (String) ldapData.get("lastname");
             String legajo = (String) ldapData.get("legajo");
 
-            return new PerfilConsultorResponse(nombrePrincipal, rolLimpio, nombre, apellido, legajo);
+            return new ComunDTO.PerfilConsultor(nombrePrincipal, rolLimpio, nombre, apellido, legajo);
         }
     }
 
@@ -70,15 +73,18 @@ public class SecurityService {
         return cuestionarioRepository.findById(idCuestionario)
                 .map(q -> {
                     String actualDoc = q.getCandidato().getNumeroDocumento();
-                    return candidatoDocDesdeToken.endsWith(actualDoc);
+                    return candidatoDocDesdeToken.equalsIgnoreCase(actualDoc) || candidatoDocDesdeToken.endsWith(actualDoc);
                 })
                 .orElse(false);
     }
 
     @Transactional
-    public Map<String, Object> autenticarCandidato(CandidatoLoginRequest peticion) {
+    public Map<String, Object> autenticarCandidato(CandidatoDTO.IniciarSesion peticion) {
+        String claveLimpia = peticion.claveAcceso() != null ? peticion.claveAcceso().trim() : "";
+
         // Buscamos el cuestionario por la clave
-        Cuestionario cuestionario = cuestionarioRepository.findByAccessKey(peticion.accessCode())
+        Cuestionario cuestionario = cuestionarioRepository.findByClaveAcceso(claveLimpia)
+                .or(() -> cuestionarioRepository.findByClaveAcceso(claveLimpia.toUpperCase()))
                 .orElseThrow(() -> new RuntimeException("Código de acceso inválido. Verifique e intente nuevamente."));
 
         if (cuestionario.getEstado() == EstadoCuestionario.COMPLETED) {
@@ -90,7 +96,8 @@ public class SecurityService {
             throw new RuntimeException("El plazo para completar este cuestionario ha finalizado.");
         }
 
-        if (LocalDateTime.now().isAfter(cuestionario.getEvaluacion().getFechaCierre())) {
+        if (cuestionario.getEvaluacion().getFechaCierre() != null &&
+                LocalDateTime.now().isAfter(cuestionario.getEvaluacion().getFechaCierre())) {
             throw new RuntimeException("La evaluación general para este puesto ya se encuentra cerrada.");
         }
 
@@ -100,6 +107,6 @@ public class SecurityService {
 
         return Map.of(
                 "token", token,
-                "questionnaireId", cuestionario.getId());
+                "idCuestionario", cuestionario.getId());
     }
 }

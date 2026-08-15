@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS empresas (
     id BIGSERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
-    deleted_at TIMESTAMP
+    fecha_baja TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS puestos (
@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS puestos (
     codigo VARCHAR(255),
     nombre VARCHAR(255) NOT NULL,
     descripcion VARCHAR(255),
-    company_id BIGINT REFERENCES empresas(id),
-    deleted_at TIMESTAMP
+    empresa_id BIGINT REFERENCES empresas(id),
+    fecha_baja TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS competencias (
@@ -28,51 +28,51 @@ CREATE TABLE IF NOT EXISTS competencias (
     nombre VARCHAR(255) NOT NULL,
     descripcion TEXT,
     tipo VARCHAR(255) NOT NULL, -- 'CONDUCTUAL', 'TECNICA'
-    deleted_at TIMESTAMP
+    fecha_baja TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS factores (
     id BIGSERIAL PRIMARY KEY,
-    competency_id BIGINT NOT NULL REFERENCES competencias(id),
+    competencia_id BIGINT NOT NULL REFERENCES competencias(id),
     codigo VARCHAR(255) UNIQUE NOT NULL,
     nombre VARCHAR(255) NOT NULL,
     descripcion TEXT,
-    order_number INT NOT NULL,
-    deleted_at TIMESTAMP
+    numero_orden INT NOT NULL,
+    fecha_baja TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS preguntas (
     id BIGSERIAL PRIMARY KEY,
     factor_id BIGINT NOT NULL REFERENCES factores(id),
     version INT NOT NULL DEFAULT 1,
-    name VARCHAR(255) NOT NULL,
-    text TEXT NOT NULL,
-    description TEXT,
-    type VARCHAR(255) NOT NULL, -- 'SINGLE_CHOICE', 'MULTIPLE_CHOICE'
-    updated_at TIMESTAMP,
-    deleted_at TIMESTAMP
+    nombre VARCHAR(255) NOT NULL,
+    texto TEXT NOT NULL,
+    descripcion TEXT,
+    tipo VARCHAR(255) NOT NULL, -- 'SINGLE_CHOICE', 'MULTIPLE_CHOICE'
+    fecha_modificacion TIMESTAMP,
+    fecha_baja TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS opciones (
     id BIGSERIAL PRIMARY KEY,
-    question_id BIGINT NOT NULL REFERENCES preguntas(id),
-    display_order INT NOT NULL,
-    weight INT NOT NULL,
+    pregunta_id BIGINT NOT NULL REFERENCES preguntas(id),
+    orden_visualizacion INT NOT NULL,
+    ponderacion INT NOT NULL,
     texto TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS puesto_competencias (
-    position_id BIGINT NOT NULL REFERENCES puestos(id),
-    competency_id BIGINT NOT NULL REFERENCES competencias(id),
+    puesto_id BIGINT NOT NULL REFERENCES puestos(id),
+    competencia_id BIGINT NOT NULL REFERENCES competencias(id),
     ponderacion_requerida INT,
-    PRIMARY KEY (position_id, competency_id)
+    PRIMARY KEY (puesto_id, competencia_id)
 );
 
 CREATE TABLE IF NOT EXISTS candidatos (
     id BIGSERIAL PRIMARY KEY,
-    nro_candidato BIGINT UNIQUE NOT NULL,
+    numero_candidato BIGINT UNIQUE NOT NULL,
     tipo_documento VARCHAR(255) NOT NULL, -- 'DNI', 'LE', 'LC', 'PP'
-    nro_documento VARCHAR(255) NOT NULL,
+    numero_documento VARCHAR(255) NOT NULL,
     nombre VARCHAR(255) NOT NULL,
     apellido VARCHAR(255) NOT NULL,
     fecha_nacimiento DATE NOT NULL,
@@ -84,65 +84,65 @@ CREATE TABLE IF NOT EXISTS candidatos (
 
 CREATE TABLE IF NOT EXISTS consultores (
     id SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL
+    nombre_usuario VARCHAR(255) UNIQUE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS evaluaciones (
     id BIGSERIAL PRIMARY KEY,
-    consultant_id INT NOT NULL REFERENCES consultores(id),
-    position_id BIGINT NOT NULL REFERENCES puestos(id),
-    code VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    close_date TIMESTAMP NOT NULL,
-    duration INT NOT NULL
+    consultor_id INT NOT NULL REFERENCES consultores(id),
+    puesto_id BIGINT NOT NULL REFERENCES puestos(id),
+    codigo VARCHAR(255) UNIQUE NOT NULL,
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT NOW(),
+    fecha_cierre TIMESTAMP NOT NULL,
+    duracion INT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cuestionarios (
     id BIGSERIAL PRIMARY KEY,
-    evaluation_id BIGINT NOT NULL REFERENCES evaluaciones(id),
-    candidate_id BIGINT NOT NULL REFERENCES candidatos(id),
-    access_key VARCHAR(255) UNIQUE NOT NULL,
-    started_at TIMESTAMP,
-    ended_at TIMESTAMP,
-    last_access TIMESTAMP,
-    access_count INT NOT NULL DEFAULT 0,
-    total_score DOUBLE PRECISION,
-    state VARCHAR(255) NOT NULL DEFAULT 'ACTIVE'
+    evaluacion_id BIGINT NOT NULL REFERENCES evaluaciones(id),
+    candidato_id BIGINT NOT NULL REFERENCES candidatos(id),
+    clave_acceso VARCHAR(255) UNIQUE NOT NULL,
+    fecha_inicio TIMESTAMP,
+    fecha_fin TIMESTAMP,
+    ultimo_acceso TIMESTAMP,
+    cantidad_accesos INT NOT NULL DEFAULT 0,
+    puntaje_total DOUBLE PRECISION,
+    estado VARCHAR(255) NOT NULL DEFAULT 'ACTIVE'
 );
 
 CREATE TABLE IF NOT EXISTS bloques (
     id BIGSERIAL PRIMARY KEY,
-    questionnaire_id BIGINT NOT NULL REFERENCES cuestionarios(id),
-    block_number INT NOT NULL
+    cuestionario_id BIGINT NOT NULL REFERENCES cuestionarios(id),
+    numero_bloque INT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS items_pregunta (
     id BIGSERIAL PRIMARY KEY,
-    block_id BIGINT NOT NULL REFERENCES bloques(id),
-    question_id BIGINT NOT NULL REFERENCES preguntas(id),
-    display_order INT NOT NULL,
-    obtained_score DOUBLE PRECISION
+    bloque_id BIGINT NOT NULL REFERENCES bloques(id),
+    pregunta_id BIGINT NOT NULL REFERENCES preguntas(id),
+    orden_visualizacion INT NOT NULL,
+    puntaje_obtenido DOUBLE PRECISION
 );
 
 CREATE TABLE IF NOT EXISTS items_opcion (
     id BIGSERIAL PRIMARY KEY,
-    question_item_id BIGINT NOT NULL REFERENCES items_pregunta(id),
-    option_id BIGINT NOT NULL REFERENCES opciones(id),
-    is_answered BOOLEAN NOT NULL DEFAULT FALSE
+    item_pregunta_id BIGINT NOT NULL REFERENCES items_pregunta(id),
+    opcion_id BIGINT NOT NULL REFERENCES opciones(id),
+    esta_respondida BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS puntajes_competencia (
     id BIGSERIAL PRIMARY KEY,
-    questionnaire_id BIGINT NOT NULL REFERENCES cuestionarios(id),
-    competency_id BIGINT NOT NULL REFERENCES competencias(id),
-    score DOUBLE PRECISION NOT NULL
+    cuestionario_id BIGINT NOT NULL REFERENCES cuestionarios(id),
+    competencia_id BIGINT NOT NULL REFERENCES competencias(id),
+    puntaje DOUBLE PRECISION NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS puntajes_factor (
     id BIGSERIAL PRIMARY KEY,
-    competency_score_id BIGINT NOT NULL REFERENCES puntajes_competencia(id),
+    puntaje_competencia_id BIGINT NOT NULL REFERENCES puntajes_competencia(id),
     factor_id BIGINT NOT NULL REFERENCES factores(id),
-    score DOUBLE PRECISION NOT NULL
+    puntaje DOUBLE PRECISION NOT NULL
 );
 
 -- ---------------------------------------------------------------------
@@ -170,7 +170,7 @@ RESTART IDENTITY CASCADE;
 -- ---------------------------------------------------------------------
 -- 2. EMPRESAS (10)
 -- ---------------------------------------------------------------------
-INSERT INTO empresas (id, nombre, deleted_at) VALUES
+INSERT INTO empresas (id, nombre, fecha_baja) VALUES
 (1, 'TechCorp Argentina', NULL),
 (2, 'Global Solutions S.A.', NULL),
 (3, 'Innovate Software', NULL),
@@ -185,7 +185,7 @@ INSERT INTO empresas (id, nombre, deleted_at) VALUES
 -- ---------------------------------------------------------------------
 -- 3. PUESTOS (30)
 -- ---------------------------------------------------------------------
-INSERT INTO puestos (id, codigo, nombre, descripcion, deleted_at, company_id) VALUES
+INSERT INTO puestos (id, codigo, nombre, descripcion, fecha_baja, empresa_id) VALUES
 (1, 'PUE-001', 'Analista de Datos Junior', 'Limpieza, análisis y visualización de datos de negocio.', NULL, 1),
 (2, 'PUE-002', 'Líder de Equipo de Desarrollo', 'Liderazgo técnico y gestión de personas.', NULL, 1),
 (3, 'PUE-003', 'Desarrollador Backend Senior', 'Arquitectura y desarrollo de servicios backend escalables.', NULL, 3),
@@ -220,7 +220,7 @@ INSERT INTO puestos (id, codigo, nombre, descripcion, deleted_at, company_id) VA
 -- ---------------------------------------------------------------------
 -- 4. COMPETENCIAS (18)
 -- ---------------------------------------------------------------------
-INSERT INTO competencias (id, codigo, nombre, descripcion, tipo, deleted_at) VALUES
+INSERT INTO competencias (id, codigo, nombre, descripcion, tipo, fecha_baja) VALUES
 (1, 'LID', 'Liderazgo', 'Capacidad de orientar, inspirar y motivar equipos hacia metas comunes.', 'CONDUCTUAL', NULL),
 (2, 'TEQ', 'Trabajo en Equipo', 'Colaboración efectiva y sinérgica con pares y líderes.', 'CONDUCTUAL', NULL),
 (3, 'PAN', 'Pensamiento Analítico', 'Interpretación rigurosa de datos y resolución fundamentada de problemas.', 'CONDUCTUAL', NULL),
@@ -243,7 +243,7 @@ INSERT INTO competencias (id, codigo, nombre, descripcion, tipo, deleted_at) VAL
 -- ---------------------------------------------------------------------
 -- 5. FACTORES (54 - Exactamente 3 por Competencia)
 -- ---------------------------------------------------------------------
-INSERT INTO factores (id, competency_id, codigo, nombre, descripcion, order_number, deleted_at) VALUES
+INSERT INTO factores (id, competencia_id, codigo, nombre, descripcion, numero_orden, fecha_baja) VALUES
 (1, 1, 'LID-01', 'Toma de Decisiones', 'Criterio en momentos de incertidumbre y presión.', 1, NULL),
 (2, 1, 'LID-02', 'Motivación del Equipo', 'Inspiración y contención durante entregas complejas.', 2, NULL),
 (3, 1, 'LID-03', 'Delegación Efectiva', 'Asignación adecuada de responsabilidades y autonomía.', 3, NULL),
@@ -302,7 +302,7 @@ INSERT INTO factores (id, competency_id, codigo, nombre, descripcion, order_numb
 -- ---------------------------------------------------------------------
 -- 6. PREGUNTAS (220 Preguntas)
 -- ---------------------------------------------------------------------
-INSERT INTO preguntas (id, factor_id, version, name, text, description, type, updated_at, deleted_at) VALUES
+INSERT INTO preguntas (id, factor_id, version, nombre, texto, descripcion, tipo, fecha_modificacion, fecha_baja) VALUES
 -- Competencia 1 (LID)
 (1, 1, 1, 'LID-01-P1', '¿Cómo actuás frente a decisiones críticas cuando la información disponible es incompleta?', 'Decisiones rápidas y fundamentadas.', 'SINGLE_CHOICE', NOW(), NULL),
 (2, 2, 1, 'LID-02-P1', '¿De qué manera mantenés motivado al equipo durante momentos de alta presión o entregas críticas?', 'Motivación directa del equipo.', 'MULTIPLE_CHOICE', NOW(), NULL),
@@ -350,7 +350,7 @@ INSERT INTO preguntas (id, factor_id, version, name, text, description, type, up
 (36, 15, 1, 'COM-03-P4', '¿Defendés los intereses técnicos y el bienestar de tu equipo en negociaciones de plazos?', 'Defensa del equipo.', 'MULTIPLE_CHOICE', NOW(), NULL);
 
 -- Inserción distribuida de preguntas 37 a 220
-INSERT INTO preguntas (id, factor_id, version, name, text, description, type, updated_at, deleted_at) VALUES
+INSERT INTO preguntas (id, factor_id, version, nombre, texto, descripcion, tipo, fecha_modificacion, fecha_baja) VALUES
 (37, 16, 1, 'PREG-037', '¿Cómo reaccionás frente a un cambio repentino en los requerimientos del sprint?', 'Adaptabilidad ante cambios.', 'SINGLE_CHOICE', NOW(), NULL),
 (38, 16, 1, 'PREG-038', '¿Te adaptás con facilidad a nuevas metodologías o estructuras de equipo?', 'Flexibilidad organizativa.', 'MULTIPLE_CHOICE', NOW(), NULL),
 (39, 16, 1, 'PREG-039', '¿Cómo gestionás la cancelación imprevista de un proyecto en el que invertiste esfuerzo?', 'Resiliencia profesional.', 'SINGLE_CHOICE', NOW(), NULL),
@@ -542,15 +542,15 @@ INSERT INTO preguntas (id, factor_id, version, name, text, description, type, up
 --    - SINGLE_CHOICE: 0, 0, 0, 10
 --    - MULTIPLE_CHOICE: 1, 2, 3, 4
 -- ---------------------------------------------------------------------
-INSERT INTO opciones (id, question_id, display_order, weight, texto)
+INSERT INTO opciones (id, pregunta_id, orden_visualizacion, ponderacion, texto)
 SELECT 
     (q.id - 1) * 4 + o_idx AS id,
-    q.id AS question_id,
-    o_idx AS display_order,
+    q.id AS pregunta_id,
+    o_idx AS orden_visualizacion,
     CASE 
-        WHEN q.type = 'SINGLE_CHOICE' THEN CASE WHEN o_idx = 4 THEN 10 ELSE 0 END
+        WHEN q.tipo = 'SINGLE_CHOICE' THEN CASE WHEN o_idx = 4 THEN 10 ELSE 0 END
         ELSE o_idx
-    END AS weight,
+    END AS ponderacion,
     CASE o_idx
         WHEN 1 THEN 'Respuesta insatisfactoria o criterio mínimo de desempeño.'
         WHEN 2 THEN 'Respuesta básica con margen considerable de mejora.'
@@ -564,7 +564,7 @@ ORDER BY q.id, o_idx;
 -- ---------------------------------------------------------------------
 -- 8. PUESTO_COMPETENCIAS (Relación Puesto - Competencias Requeridas)
 -- ---------------------------------------------------------------------
-INSERT INTO puesto_competencias (position_id, competency_id, ponderacion_requerida) VALUES
+INSERT INTO puesto_competencias (puesto_id, competencia_id, ponderacion_requerida) VALUES
 -- Puesto 1: Analista de Datos Junior
 (1, 2, 8), (1, 3, 6), (1, 5, 6),
 
@@ -610,7 +610,7 @@ INSERT INTO puesto_competencias (position_id, competency_id, ponderacion_requeri
 -- ---------------------------------------------------------------------
 -- 9. CANDIDATOS (Semilla inicial de prueba)
 -- ---------------------------------------------------------------------
-INSERT INTO candidatos (id, nro_candidato, tipo_documento, nro_documento, nombre, apellido, fecha_nacimiento, genero, email, escolaridad, nacionalidad) VALUES
+INSERT INTO candidatos (id, numero_candidato, tipo_documento, numero_documento, nombre, apellido, fecha_nacimiento, genero, email, escolaridad, nacionalidad) VALUES
 (1, 10001, 'DNI', '38450123', 'Lucas', 'Gimenez', '1994-05-12', 'H', 'lucas.gimenez@email.com', 'Universitario Completo', 'Argentina'),
 (2, 10002, 'DNI', '40123987', 'Sofia', 'Rodriguez', '1997-09-24', 'M', 'sofia.rodriguez@email.com', 'Universitario Completo', 'Argentina'),
 (3, 10003, 'DNI', '35987654', 'Martin', 'Alvarez', '1991-03-18', 'H', 'martin.alvarez@email.com', 'Universitario Completo', 'Argentina'),
@@ -625,7 +625,7 @@ INSERT INTO candidatos (id, nro_candidato, tipo_documento, nro_documento, nombre
 -- ---------------------------------------------------------------------
 -- 10. CONSULTORES (Mapeados con el directorio LDAP)
 -- ---------------------------------------------------------------------
-INSERT INTO consultores (id, username) VALUES
+INSERT INTO consultores (id, nombre_usuario) VALUES
 (1, 'mfrank'),
 (2, 'jperez'),
 (3, 'agomez'),

@@ -17,72 +17,23 @@ public class Evaluacion {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "consultant_id", nullable = false)
-    private Consultor consultant;
+    @JoinColumn(name = "consultor_id", nullable = false)
+    private Consultor consultor;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "position_id", nullable = false)
-    private Puesto position;
+    @JoinColumn(name = "puesto_id", nullable = false)
+    private Puesto puesto;
 
-    @Column(nullable = false, unique = true)
-    private String code;
+    @Column(name = "codigo", nullable = false, unique = true)
+    private String codigo;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "fecha_creacion", nullable = false)
+    private LocalDateTime fechaCreacion;
 
-    @Column(name = "close_date", nullable = false)
-    private LocalDateTime closeDate;
+    @Column(name = "fecha_cierre", nullable = false)
+    private LocalDateTime fechaCierre;
 
-    @Column(name = "duration", nullable = false)
-    private Integer duration; // Duración en minutos
-
-    // Métodos en español
-    public Consultor getConsultor() {
-        return consultant;
-    }
-
-    public void setConsultor(Consultor consultor) {
-        this.consultant = consultor;
-    }
-
-    public Puesto getPuesto() {
-        return position;
-    }
-
-    public void setPuesto(Puesto puesto) {
-        this.position = puesto;
-    }
-
-    public String getCodigo() {
-        return code;
-    }
-
-    public void setCodigo(String codigo) {
-        this.code = codigo;
-    }
-
-    public LocalDateTime getFechaCreacion() {
-        return createdAt;
-    }
-
-    public void setFechaCreacion(LocalDateTime fechaCreacion) {
-        this.createdAt = fechaCreacion;
-    }
-
-    public LocalDateTime getFechaCierre() {
-        return closeDate;
-    }
-
-    public void setFechaCierre(LocalDateTime fechaCierre) {
-        this.closeDate = fechaCierre;
-    }
-
-    public Integer getDuracion() {
-        return duration;
-    }
-
-    public void setDuracion(Integer duracion) {
-        this.duration = duracion;
-    }
+    @Column(name = "duracion", nullable = false)
+    private Integer duracion; // Duración en minutos
 }

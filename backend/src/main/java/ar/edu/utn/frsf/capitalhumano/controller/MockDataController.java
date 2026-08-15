@@ -1,12 +1,12 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
-import ar.edu.utn.frsf.capitalhumano.model.Evaluacion;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Bloque;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.ItemOpcion;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.ItemPregunta;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Cuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.EvaluacionRepository;
+import ar.edu.utn.frsf.capitalhumano.model.Bloque;
+import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
+import ar.edu.utn.frsf.capitalhumano.model.Evaluacion;
+import ar.edu.utn.frsf.capitalhumano.model.ItemOpcion;
+import ar.edu.utn.frsf.capitalhumano.model.ItemPregunta;
+import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
 import ar.edu.utn.frsf.capitalhumano.service.CuestionarioService;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,7 +41,7 @@ public class MockDataController {
         Evaluacion evaluacion = evaluacionRepository.findById(idEvaluacion)
                 .orElseThrow(() -> new IllegalArgumentException("Evaluación no encontrada"));
 
-        List<Cuestionario> cuestionarios = cuestionarioRepository.findByEvaluationId(idEvaluacion);
+        List<Cuestionario> cuestionarios = cuestionarioRepository.findByEvaluacionId(idEvaluacion);
         Random random = new Random();
 
         int countCompletos = 0;
@@ -102,7 +102,7 @@ public class MockDataController {
                         answers.put(item.getId(), selectedIds);
                     }
                     // Enviamos las respuestas del bloque al servicio para que las procese
-                    cuestionarioService.enviarRespuestasBloque(updatedQ.getId(), block.getNumeroBloque(), answers);
+                    cuestionarioService.guardarRespuestasBloque(updatedQ.getId(), block.getNumeroBloque(), answers);
                 }
             }
         }

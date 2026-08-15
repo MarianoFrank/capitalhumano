@@ -1,7 +1,2 @@
-import { useContext } from 'react';
-import { TemaContext } from '../context/TemaContext';
-
-export const useTema = () => useContext(TemaContext);
-export const useTheme = useTema;
-
-export default useTema;
+export { useTema, useTheme, TemaContext, ProveedorTema } from '../context/ContextoApp';
+export { useTema as default } from '../context/ContextoApp';

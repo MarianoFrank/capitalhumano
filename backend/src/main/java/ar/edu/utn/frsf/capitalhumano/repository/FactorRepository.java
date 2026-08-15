@@ -1,29 +1,14 @@
 package ar.edu.utn.frsf.capitalhumano.repository;
 
-import ar.edu.utn.frsf.capitalhumano.dto.response.SelectItemResponse;
 import ar.edu.utn.frsf.capitalhumano.model.Factor;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.List;
 
-public interface FactorRepository extends JpaRepository<Factor, Long> {
+public interface FactorRepository extends JpaRepository<Factor, Long>, JpaSpecificationExecutor<Factor> {
 
-    @Query("""
-        SELECT new ar.edu.utn.frsf.capitalhumano.dto.response.SelectItemResponse(f.id, f.name)
-        FROM Factor f
-        WHERE f.deletedAt IS NULL
-        ORDER BY f.name
-    """)
-    List<SelectItemResponse> findAllForSelect();
+    List<Factor> findByFechaBajaIsNullOrderByNombreAsc();
 
-    @Query("""
-        SELECT new ar.edu.utn.frsf.capitalhumano.dto.response.SelectItemResponse(f.id, f.name)
-        FROM Factor f
-        WHERE f.deletedAt IS NULL
-          AND f.competency.id = :competencyId
-        ORDER BY f.name
-    """)
-    List<SelectItemResponse> findForSelectByCompetencyId(@Param("competencyId") Long competencyId);
+    List<Factor> findByCompetenciaIdAndFechaBajaIsNullOrderByNombreAsc(Long competenciaId);
 }

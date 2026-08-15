@@ -1,117 +1,198 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.GenerarEvaluacionRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.ClaveEvaluacionResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.EvaluacionDTO;
+import ar.edu.utn.frsf.capitalhumano.mapper.EvaluacionMapper;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Cuestionario;
-import ar.edu.utn.frsf.capitalhumano.repository.*;
-
+import ar.edu.utn.frsf.capitalhumano.repository.CandidatoRepository;
+import ar.edu.utn.frsf.capitalhumano.repository.ConsultorRepository;
+import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
+import ar.edu.utn.frsf.capitalhumano.repository.EvaluacionRepository;
+import ar.edu.utn.frsf.capitalhumano.repository.PreguntaRepository;
+import ar.edu.utn.frsf.capitalhumano.repository.PuestoRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class EvaluacionService {
 
+    private final EvaluacionRepository evaluacionRepository;
     private final PuestoRepository puestoRepository;
     private final CandidatoRepository candidatoRepository;
-    private final CompetenciaRepository competenciaRepository;
-    private final EvaluacionRepository evaluacionRepository;
     private final CuestionarioRepository cuestionarioRepository;
     private final ConsultorRepository consultorRepository;
+    private final PreguntaRepository preguntaRepository;
+    private final EvaluacionMapper evaluacionMapper;
 
-    // Constantes para la clave aleatoria
-    private static final String CARACTERES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final String CARACTERES_CLAVE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int LONGITUD_CLAVE = 8;
+    private static final int PREGUNTAS_POR_BLOQUE = 5;
     private final SecureRandom random = new SecureRandom();
 
-    public EvaluacionService(PuestoRepository puestoRepository, CandidatoRepository candidatoRepository,
-            CompetenciaRepository competenciaRepository, EvaluacionRepository evaluacionRepository,
-            CuestionarioRepository cuestionarioRepository, ConsultorRepository consultorRepository) {
+    public EvaluacionService(EvaluacionRepository evaluacionRepository,
+            PuestoRepository puestoRepository,
+            CandidatoRepository candidatoRepository,
+            CuestionarioRepository cuestionarioRepository,
+            ConsultorRepository consultorRepository,
+            PreguntaRepository preguntaRepository,
+            EvaluacionMapper evaluacionMapper) {
+        this.evaluacionRepository = evaluacionRepository;
         this.puestoRepository = puestoRepository;
         this.candidatoRepository = candidatoRepository;
-        this.competenciaRepository = competenciaRepository;
-        this.evaluacionRepository = evaluacionRepository;
         this.cuestionarioRepository = cuestionarioRepository;
         this.consultorRepository = consultorRepository;
+        this.preguntaRepository = preguntaRepository;
+        this.evaluacionMapper = evaluacionMapper;
     }
 
     @Transactional
-    public List<ClaveEvaluacionResponse> generarEvaluacion(GenerarEvaluacionRequest peticion) {
+    public List<EvaluacionDTO.ClaveGenerada> generarEvaluacion(EvaluacionDTO.Generar peticion) {
+        String usernameConsultor = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        Optional<Consultor> consultor = consultorRepository.findByUsername(usernameConsultor);
+
+        if (!consultor.isPresent()) {
+            throw new RuntimeException("Consultor no encontrado");
+        }
 
         Puesto puesto = puestoRepository.findById(peticion.idPuesto())
                 .orElseThrow(() -> new RuntimeException("Puesto no encontrado"));
 
-        // validamos si las competencias del puesto cumplen con los requisitos para ser evaluadas
-        List<Long> compIdsValidos = competenciaRepository.findValidCompetencyIds();
-        for (PuestoCompetencia pc : puesto.getCompetencias()) {
-            if (!compIdsValidos.contains(pc.getCompetencia().getId())) {
-                throw new RuntimeException("Error: La competencia " + pc.getCompetencia().getNombre()
-                        + " no cumple los requisitos para ser evaluada.");
-            }
-        }
-
         Evaluacion evaluacion = new Evaluacion();
-        evaluacion.setPuesto(puesto);
-
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        Consultor consultor = consultorRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("Usuario autenticado no encontrado en la base de datos"));
-
-        evaluacion.setConsultor(consultor);
         evaluacion.setCodigo("EVAL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
-        // Le sumamos 7 días pero clavamos la hora a las 23:59:59 para sincronizar con el scheduler
-        evaluacion.setFechaCierre(LocalDateTime.now().plusDays(7).with(LocalTime.MAX));
-        evaluacion.setDuracion(60); // 60 minutos de tiempo para el test
+        evaluacion.setPuesto(puesto);
+        evaluacion.setConsultor(consultor.get());
+        evaluacion.setDuracion(60);
+        evaluacion.setFechaCreacion(LocalDateTime.now());
+        evaluacion.setFechaCierre(LocalDateTime.now().plusDays(7));
 
         evaluacion = evaluacionRepository.save(evaluacion);
 
-        // 4. Buscar candidatos y preparar los cuestionarios
-        List<Candidato> candidatos = candidatoRepository.findAllById(peticion.idsCandidatos());
-        List<Cuestionario> cuestionarios = new ArrayList<>();
-        List<ClaveEvaluacionResponse> listaRespuesta = new ArrayList<>();
+        List<EvaluacionDTO.ClaveGenerada> clavesGeneradas = new ArrayList<>();
 
-        for (Candidato candidato : candidatos) {
-            Cuestionario q = new Cuestionario();
-            q.setEvaluacion(evaluacion);
-            q.setCandidato(candidato);
+        for (Long candidatoId : peticion.idsCandidatos()) {
+            Candidato candidato = candidatoRepository.findById(candidatoId)
+                    .orElseThrow(() -> new RuntimeException("Candidato con ID " + candidatoId + " no encontrado"));
 
-            // Generar clave de 8 caracteres alfanuméricos
-            String claveAcceso = generarClaveAcceso();
-            q.setClaveAcceso(claveAcceso);
+            String claveAcceso = generarClaveAccesoUnica();
 
-            q.setCantidadAccesos(0);
-            q.setEstado(EstadoCuestionario.ACTIVE);
+            Cuestionario cuestionario = new Cuestionario();
+            cuestionario.setEvaluacion(evaluacion);
+            cuestionario.setCandidato(candidato);
+            cuestionario.setClaveAcceso(claveAcceso);
+            cuestionario.setEstado(EstadoCuestionario.ACTIVE);
+            cuestionario.setCantidadAccesos(0);
 
-            cuestionarios.add(q);
+            // Generamos la estructura completa de bloques, preguntas y opciones
+            generarEstructuraCuestionario(cuestionario, puesto);
 
-            // Llenamos la lista para devolverle al Frontend y que arme el Excel
-            listaRespuesta.add(new ClaveEvaluacionResponse(
-                    String.valueOf(candidato.getNumeroCandidato()),
-                    candidato.getNombre(),
-                    candidato.getApellido(),
-                    claveAcceso));
+            cuestionarioRepository.save(cuestionario);
+
+            clavesGeneradas.add(evaluacionMapper.aClaveGenerada(candidato, claveAcceso));
         }
 
-        // Aca no generamos los bloques eso se hace cuando un candidato ingresa con su clave ahi se procesa la generacion y seleccion de preguntas
-        cuestionarioRepository.saveAll(cuestionarios);
-
-        return listaRespuesta;
+        return clavesGeneradas;
     }
 
-    private String generarClaveAcceso() {
-        StringBuilder sb = new StringBuilder(LONGITUD_CLAVE);
-        for (int i = 0; i < LONGITUD_CLAVE; i++) {
-            sb.append(CARACTERES.charAt(random.nextInt(CARACTERES.length())));
+    public void generarEstructuraCuestionario(Cuestionario cuestionario, Puesto puesto) {
+        List<Pregunta> preguntasSeleccionadas = new ArrayList<>();
+
+        if (puesto.getCompetencias() != null) {
+            for (PuestoCompetencia pc : puesto.getCompetencias()) {
+                Competencia comp = pc.getCompetencia();
+                if (comp == null || comp.getFechaBaja() != null) continue;
+
+                if (comp.getFactores() != null) {
+                    for (Factor factor : comp.getFactores()) {
+                        if (factor == null || factor.getFechaBaja() != null) continue;
+
+                        List<Pregunta> preguntasFactor = new ArrayList<>(
+                                preguntaRepository.findActiveByFactorId(factor.getId()));
+
+                        if (!preguntasFactor.isEmpty()) {
+                            Collections.shuffle(preguntasFactor, random);
+                            int cantidadTomar = Math.min(2, preguntasFactor.size());
+                            preguntasSeleccionadas.addAll(preguntasFactor.subList(0, cantidadTomar));
+                        }
+                    }
+                }
+            }
         }
-        return sb.toString();
+
+        // Si por alguna razón el puesto no tiene preguntas específicas, fallback a preguntas activas
+        if (preguntasSeleccionadas.isEmpty()) {
+            List<Pregunta> todasActivas = new ArrayList<>(preguntaRepository.findAll().stream()
+                    .filter(p -> p.getFechaBaja() == null)
+                    .toList());
+            if (!todasActivas.isEmpty()) {
+                Collections.shuffle(todasActivas, random);
+                preguntasSeleccionadas.addAll(todasActivas.subList(0, Math.min(10, todasActivas.size())));
+            }
+        }
+
+        List<Bloque> bloques = new ArrayList<>();
+        int numeroBloque = 1;
+
+        for (int i = 0; i < preguntasSeleccionadas.size(); i += PREGUNTAS_POR_BLOQUE) {
+            int fin = Math.min(i + PREGUNTAS_POR_BLOQUE, preguntasSeleccionadas.size());
+            List<Pregunta> preguntasBloque = preguntasSeleccionadas.subList(i, fin);
+
+            Bloque bloque = new Bloque();
+            bloque.setCuestionario(cuestionario);
+            bloque.setNumeroBloque(numeroBloque++);
+            bloque.setItemsPregunta(new ArrayList<>());
+
+            int ordenPregunta = 1;
+            for (Pregunta preg : preguntasBloque) {
+                ItemPregunta itemPregunta = new ItemPregunta();
+                itemPregunta.setBloque(bloque);
+                itemPregunta.setPregunta(preg);
+                itemPregunta.setOrdenVisualizacion(ordenPregunta++);
+                itemPregunta.setItemsOpcion(new ArrayList<>());
+
+                if (preg.getOpciones() != null) {
+                    for (Opcion opc : preg.getOpciones()) {
+                        ItemOpcion itemOpcion = new ItemOpcion();
+                        itemOpcion.setItemPregunta(itemPregunta);
+                        itemOpcion.setOpcion(opc);
+                        itemOpcion.setEstaRespondida(false);
+                        itemPregunta.getItemsOpcion().add(itemOpcion);
+                    }
+                }
+
+                bloque.getItemsPregunta().add(itemPregunta);
+            }
+
+            bloques.add(bloque);
+        }
+
+        if (cuestionario.getBloques() != null) {
+            cuestionario.getBloques().clear();
+            cuestionario.getBloques().addAll(bloques);
+        } else {
+            cuestionario.setBloques(new ArrayList<>(bloques));
+        }
+    }
+
+    private String generarClaveAccesoUnica() {
+        String clave;
+        do {
+            StringBuilder sb = new StringBuilder(LONGITUD_CLAVE);
+            for (int i = 0; i < LONGITUD_CLAVE; i++) {
+                sb.append(CARACTERES_CLAVE.charAt(random.nextInt(CARACTERES_CLAVE.length())));
+            }
+            clave = sb.toString();
+        } while (cuestionarioRepository.findByClaveAcceso(clave).isPresent());
+
+        return clave;
     }
 }

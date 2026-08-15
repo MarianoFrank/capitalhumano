@@ -1,19 +1,20 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import ar.edu.utn.frsf.capitalhumano.dto.response.ReporteCandidatoResponse;
-import ar.edu.utn.frsf.capitalhumano.dto.response.EvaluacionResumenResponse;
-import ar.edu.utn.frsf.capitalhumano.dto.response.ReporteOrdenMeritoResponse;
-import ar.edu.utn.frsf.capitalhumano.dto.response.PuestoResumenResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.EvaluacionDTO;
+import ar.edu.utn.frsf.capitalhumano.dto.PuestoDTO;
+import ar.edu.utn.frsf.capitalhumano.mapper.CuestionarioMapper;
+import ar.edu.utn.frsf.capitalhumano.mapper.EvaluacionMapper;
+import ar.edu.utn.frsf.capitalhumano.mapper.PuestoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.Cuestionario;
-import ar.edu.utn.frsf.capitalhumano.model.cuestionario.PuntajeCompetencia;
+import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.EvaluacionRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.PuestoRepository;
-import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
-
+import ar.edu.utn.frsf.capitalhumano.specification.PuestoSpecification;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ReporteService {
@@ -31,155 +33,157 @@ public class ReporteService {
     private final PuestoRepository puestoRepository;
     private final EvaluacionRepository evaluacionRepository;
     private final PuntajeAsyncService puntajeAsyncService;
+    private final PuestoMapper puestoMapper;
+    private final CuestionarioMapper cuestionarioMapper;
+    private final EvaluacionMapper evaluacionMapper;
 
-    public ReporteService(CuestionarioRepository cuestionarioRepository, PuestoRepository puestoRepository,
-            EvaluacionRepository evaluacionRepository, PuntajeAsyncService puntajeAsyncService) {
+    public ReporteService(CuestionarioRepository cuestionarioRepository,
+            PuestoRepository puestoRepository,
+            EvaluacionRepository evaluacionRepository,
+            PuntajeAsyncService puntajeAsyncService,
+            PuestoMapper puestoMapper,
+            CuestionarioMapper cuestionarioMapper,
+            EvaluacionMapper evaluacionMapper) {
         this.cuestionarioRepository = cuestionarioRepository;
         this.puestoRepository = puestoRepository;
         this.evaluacionRepository = evaluacionRepository;
         this.puntajeAsyncService = puntajeAsyncService;
+        this.puestoMapper = puestoMapper;
+        this.cuestionarioMapper = cuestionarioMapper;
+        this.evaluacionMapper = evaluacionMapper;
     }
 
     @Transactional(readOnly = true)
-    public ReporteOrdenMeritoResponse generarOrdenMerito(Long idPuesto, Long idEvaluacion) {
+    public EvaluacionDTO.ReporteOrdenMerito generarOrdenMerito(Long idPuesto, Long idEvaluacion) {
         Puesto puesto = puestoRepository.findById(idPuesto)
-                .orElseThrow(() -> new IllegalArgumentException("Puesto no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Puesto no encontrado con ID: " + idPuesto));
 
         List<Cuestionario> cuestionarios;
-
-        // Validamos que la evaluación exista y que pertenezca al puesto
         if (idEvaluacion != null) {
-            Evaluacion evaluacion = evaluacionRepository.findById(idEvaluacion)
-                    .orElseThrow(() -> new IllegalArgumentException("La evaluación especificada no existe"));
-
-            if (!evaluacion.getPosition().getId().equals(idPuesto)) {
-                throw new IllegalArgumentException("La evaluación enviada no pertenece al puesto seleccionado");
-            }
-
-            cuestionarios = cuestionarioRepository.findByEvaluationId(idEvaluacion);
+            cuestionarios = cuestionarioRepository.findByEvaluacionId(idEvaluacion);
         } else {
-            cuestionarios = cuestionarioRepository.findByEvaluationPositionId(idPuesto);
+            cuestionarios = cuestionarioRepository.findByEvaluacionPuestoId(idPuesto);
         }
 
-        List<ReporteCandidatoResponse> aprobados = new ArrayList<>();
-        List<ReporteCandidatoResponse> noAprobados = new ArrayList<>();
+        List<EvaluacionDTO.ReporteCandidato> aprobados = new ArrayList<>();
+        List<EvaluacionDTO.ReporteCandidato> noAprobados = new ArrayList<>();
 
         for (Cuestionario q : cuestionarios) {
-            // Si está completado pero el servidor se cayó antes de calcular el puntaje
-            if (q.getEstado() == EstadoCuestionario.COMPLETED && q.getPuntajeTotal() == null) {
-                // Lo calculamos sincrónicamente
-                Double puntajeRecuperado = puntajeAsyncService.calcularPuntajeSincrono(q.getId());
-                q.setPuntajeTotal(puntajeRecuperado);
+            if (q.getEstado() == EstadoCuestionario.COMPLETED &&
+                    (q.getPuntajeTotal() == null || q.getPuntajesCompetencias() == null
+                            || q.getPuntajesCompetencias().isEmpty())) {
+                puntajeAsyncService.calcularPuntajeSincrono(q.getId());
+                q = cuestionarioRepository.findById(q.getId()).orElse(q);
             }
 
-            Candidato c = q.getCandidato();
+            EvaluacionDTO.ReporteCandidato dto = cuestionarioMapper.aReporteCandidato(q);
 
-            // Mapeamos los datos adicionales según si completó o no
-            LocalDateTime fechaFinal = (q.getEstado() == EstadoCuestionario.COMPLETED) ? q.getFechaFin()
-                    : q.getUltimoAcceso();
-
-            ReporteCandidatoResponse candidatoDto = new ReporteCandidatoResponse(
-                    c.getNombre(),
-                    c.getApellido(),
-                    c.getTipoDocumento().name(),
-                    c.getNumeroDocumento(),
-                    String.valueOf(c.getNumeroCandidato()),
-                    q.getEstado().name(),
-                    (q.getEstado() == EstadoCuestionario.COMPLETED) ? q.getPuntajeTotal() : null,
-                    q.getFechaInicio(),
-                    fechaFinal,
-                    q.getCantidadAccesos());
-
-            if (q.getEstado() == EstadoCuestionario.COMPLETED && cumpleRequisitosMinimos(q, puesto)) {
-                aprobados.add(candidatoDto);
+            if (esCandidatoAprobado(q, puesto)) {
+                aprobados.add(dto);
             } else {
-                noAprobados.add(candidatoDto);
+                noAprobados.add(dto);
             }
         }
 
-        aprobados.sort(Comparator.comparing(ReporteCandidatoResponse::score, Comparator.reverseOrder()));
-        noAprobados.sort(Comparator.comparing(ReporteCandidatoResponse::state));
+        aprobados.sort(Comparator.comparing(EvaluacionDTO.ReporteCandidato::puntaje,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        noAprobados.sort(Comparator.comparing(EvaluacionDTO.ReporteCandidato::puntaje,
+                Comparator.nullsLast(Comparator.reverseOrder())));
 
-        // Sacamos el nombre del consultor que lo está emitiendo
-        String consultor = SecurityContextHolder.getContext().getAuthentication().getName();
+        org.springframework.security.core.Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String nombreConsultor = (auth != null && auth.getName() != null) ? auth.getName() : "Sistema";
 
-        return new ReporteOrdenMeritoResponse(
-                puesto.getEmpresa().getNombre(),
-                puesto.getNombre(),
-                consultor,
+        return cuestionarioMapper.aReporteOrdenMerito(
+                puesto,
+                nombreConsultor,
                 LocalDateTime.now(),
                 aprobados,
                 noAprobados);
     }
 
-    // Valida si el candidato alcanzó las ponderaciones mínimas en TODAS las competencias
-    private boolean cumpleRequisitosMinimos(Cuestionario q, Puesto p) {
-        for (PuestoCompetencia pc : p.getCompetencias()) {
-            Long compId = pc.getCompetencia().getId();
+    private boolean esCandidatoAprobado(Cuestionario cuestionario, Puesto puesto) {
+        if (cuestionario.getEstado() != EstadoCuestionario.COMPLETED) {
+            return false;
+        }
 
-            double minRequired = pc.getPonderacionRequerida();
+        List<PuestoCompetencia> competenciasPuesto = puesto.getCompetencias();
+        if (competenciasPuesto == null || competenciasPuesto.isEmpty()) {
+            return true;
+        }
 
-            // Buscamos cuánto sacó el candidato en esta competencia específica
-            double candidateScore = q.getPuntajesCompetencias().stream()
-                    .filter(cs -> cs.getCompetencia().getId().equals(compId))
-                    .map(PuntajeCompetencia::getPuntaje)
-                    .findFirst()
-                    .orElse(0.0);
+        List<PuntajeCompetencia> puntajesCompetencias = cuestionario.getPuntajesCompetencias();
+        if (puntajesCompetencias == null || puntajesCompetencias.isEmpty()) {
+            return false;
+        }
 
-            if (candidateScore < minRequired) {
-                return false; // No alcanzó el mínimo requerido
+        for (PuestoCompetencia pc : competenciasPuesto) {
+            Competencia compRequerida = pc.getCompetencia();
+            if (compRequerida == null || compRequerida.getFechaBaja() != null) {
+                continue;
+            }
+
+            Integer ponderacionRequerida = pc.getPonderacionRequerida();
+            if (ponderacionRequerida == null) {
+                continue;
+            }
+
+            // Buscamos el puntaje obtenido por el candidato en esta competencia específica
+            Optional<PuntajeCompetencia> puntajeObtenido = puntajesCompetencias.stream()
+                    .filter(pcScore -> pcScore.getCompetencia() != null &&
+                            pcScore.getCompetencia().getId().equals(compRequerida.getId()))
+                    .findFirst();
+
+            if (puntajeObtenido.isEmpty()) {
+                return false;
+            }
+
+            Double score = puntajeObtenido.get().getPuntaje();
+            if (score == null || score < ponderacionRequerida.doubleValue()) {
+                return false;
             }
         }
+
         return true;
     }
 
     @Transactional(readOnly = true)
-    public Page<PuestoResumenResponse> obtenerPuestosParaReporte(Long idEmpresa, String nombrePuesto, String codigo,
-            Pageable pageable) {
+    public Page<PuestoDTO.Resumen> obtenerPuestosParaReporte(
+            Long idEmpresa, String nombrePuesto, String codigo, Pageable pageable) {
 
-        Page<Puesto> positions = puestoRepository.findWithFilters(idEmpresa, nombrePuesto, codigo, pageable);
+        Specification<Puesto> spec = PuestoSpecification.conFiltrosReporte(idEmpresa, nombrePuesto, codigo);
+        Page<Puesto> puestosPage = puestoRepository.findAll(spec, pageable);
 
-        return positions.map(pos -> {
-            // Traemos todos los cuestionarios de este puesto
-            List<Cuestionario> qs = cuestionarioRepository.findByEvaluationPositionId(pos.getId());
+        List<PuestoDTO.Resumen> listaDto = new ArrayList<>();
+        for (Puesto puesto : puestosPage.getContent()) {
+            List<Cuestionario> cuestionarios = cuestionarioRepository.findByEvaluacionPuestoId(puesto.getId());
+            int totalCandidatos = cuestionarios.size();
+            int completadas = (int) cuestionarios.stream()
+                    .filter(c -> c.getEstado() == EstadoCuestionario.COMPLETED)
+                    .count();
 
-            int totalCandidates = qs.size();
-            int completed = (int) qs.stream().filter(q -> q.getEstado() == EstadoCuestionario.COMPLETED).count();
+            listaDto.add(puestoMapper.aResumen(puesto, totalCandidatos, completadas));
+        }
 
-            return new PuestoResumenResponse(
-                    pos.getId(),
-                    pos.getCodigo(),
-                    pos.getNombre(),
-                    pos.getEmpresa().getNombre(),
-                    totalCandidates,
-                    completed);
-        });
+        return new PageImpl<>(listaDto, pageable, puestosPage.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public List<EvaluacionResumenResponse> obtenerResumenEvaluacionesPorPuesto(Long idPuesto) {
+    public List<EvaluacionDTO.Resumen> obtenerResumenEvaluacionesPorPuesto(Long idPuesto) {
+        List<Evaluacion> evaluaciones = evaluacionRepository.findByPuestoId(idPuesto);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-        List<Evaluacion> evaluations = evaluacionRepository.findByPositionId(idPuesto);
-        List<EvaluacionResumenResponse> dtoList = new ArrayList<>();
+        List<EvaluacionDTO.Resumen> lista = new ArrayList<>();
+        for (Evaluacion ev : evaluaciones) {
+            List<Cuestionario> cuestionarios = cuestionarioRepository.findByEvaluacionId(ev.getId());
+            int total = cuestionarios.size();
+            long completadas = cuestionarios.stream().filter(c -> c.getEstado() == EstadoCuestionario.COMPLETED)
+                    .count();
 
-        for (Evaluacion eval : evaluations) {
-            // Traemos los cuestionarios solo de esta evaluación
-            List<Cuestionario> qs = cuestionarioRepository.findByEvaluationId(eval.getId());
+            String fechaStr = ev.getFechaCreacion() != null ? ev.getFechaCreacion().format(formatter) : "Sin fecha";
+            String descripcion = String.format("%s - Candidatos: %d - Completadas: %d", fechaStr, total, completadas);
 
-            int total = qs.size();
-            int completados = (int) qs.stream().filter(q -> q.getEstado() == EstadoCuestionario.COMPLETED).count();
-
-            // Formateamos la fecha
-            String fechaApertura = eval.getFechaCreacion() != null
-                    ? eval.getFechaCreacion().format(DateTimeFormatter.ofPattern("dd/MM/yy"))
-                    : "N/A";
-
-            String description = String.format("%s - Candidatos:%d - Evaluaciones Completadas:%d",
-                    fechaApertura, total, completados);
-
-            dtoList.add(new EvaluacionResumenResponse(eval.getId(), description));
+            lista.add(evaluacionMapper.aResumen(ev.getId(), descripcion));
         }
-
-        return dtoList;
+        return lista;
     }
 }

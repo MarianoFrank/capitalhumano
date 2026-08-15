@@ -1,14 +1,9 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.GenerarPreguntaRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.GenerarPreguntaResponse;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
+import ar.edu.utn.frsf.capitalhumano.dto.PreguntaDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -19,67 +14,93 @@ import java.util.Map;
 public class IaGeneracionService {
 
     @Value("${gemini.api.key}")
-    private String apiKey;
+    private String geminiApiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
 
-    public GenerarPreguntaResponse generarPregunta(GenerarPreguntaRequest peticion) {
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key="
-                + apiKey;
+    public IaGeneracionService() {
+        this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
+    }
 
-        // Si están vacíos, le avisamos a la IA para que los genere. Si tienen texto, los usamos de contexto.
-        String qName = (peticion.questionName() != null && !peticion.questionName().isBlank())
-                ? peticion.questionName()
-                : "[VACÍO] - Genera un nombre corto y descriptivo para esta pregunta.";
-        String qDesc = (peticion.description() != null && !peticion.description().isBlank())
-                ? peticion.description()
-                : "[VACÍO] - Genera una breve descripción del objetivo de esta pregunta.";
-        String extra = (peticion.extraContext() != null && !peticion.extraContext().isBlank())
-                ? peticion.extraContext()
-                : "Ninguno";
+    public PreguntaDTO.IaRespuesta generarPregunta(PreguntaDTO.IaPeticion peticion) {
+        String prompt = """
+                Sos un experto psicotécnico y de Recursos Humanos especializado en el modelo de evaluación por competencias.
+                Necesito que generes una pregunta situacional/comportamental desafiante basada en los siguientes datos:
+                - Competencia: %s
+                - Factor / Dimensión: %s
+                - Nombre preliminar de la pregunta: %s
+                - Descripción / Objetivo de evaluación: %s
+                - Contexto adicional / Indicaciones especiales: %s
 
-        // Prompt actualizado con los nuevos campos
-        String prompt = String.format(
-                "Sos un consultor experto en recursos humanos y evaluación de talento. " +
-                        "Tu tarea es generar UNA pregunta para evaluar a un candidato en un sistema. " +
-                        "Aquí tienes el contexto:\n" +
-                        "- Competencia: '%s'\n" +
-                        "- Factor específico: '%s'\n" +
-                        "- Nombre de la métrica/pregunta: '%s'\n" +
-                        "- Descripción/Objetivo: '%s'\n" +
-                        "- Aclaraciones extra del consultor: '%s'\n\n" +
-                        "REGLAS ESTRICTAS OBLIGATORIAS:\n" +
-                        "1. Genera un mínimo de 3 opciones de respuesta (puedes generar 4 o 5 si es necesario).\n" +
-                        "2. La suma TOTAL de los valores 'weight' (ponderación) de todas las opciones debe ser EXACTAMENTE 10.\n"
-                        +
-                        "3. Determina el tipo de pregunta ('SINGLE_CHOICE' si hay una sola opción correcta/ideal, o 'MULTIPLE_CHOICE' si hay varias opciones válidas que suman puntos).\n"
-                        +
-                        "4. Devuelve SOLO un JSON válido con este formato exacto, sin bloques markdown (```):\n" +
-                        "{ \"questionName\": \"Nombre generado o el aportado\", \"description\": \"Descripción generada o la aportada\", \"type\": \"SINGLE_CHOICE\", \"text\": \"Texto de la pregunta\", \"options\": [ { \"text\": \"opción 1\", \"weight\": 10 }, { \"text\": \"opción 2\", \"weight\": 0 } ] }",
-                peticion.competencyName(), peticion.factorName(), qName, qDesc, extra);
+                Estructura de salida JSON esperada (ESTRICTA):
+                {
+                    "nombrePregunta": "Un título conciso y profesional para la pregunta",
+                    "descripcion": "Breve justificación o contexto de evaluación",
+                    "tipo": "SINGLE_CHOICE",
+                    "texto": "El enunciado completo, claro y situacional de la pregunta",
+                    "opciones": [
+                        { "texto": "Opción excelente que refleja la conducta esperada", "ponderacion": 10 },
+                        { "texto": "Opción adecuada pero no ideal", "ponderacion": 6 },
+                        { "texto": "Opción neutral o poco efectiva", "ponderacion": 3 },
+                        { "texto": "Opción totalmente desacertada o contraproducente", "ponderacion": 0 }
+                    ]
+                }
+                
+                IMPORTANTE: 
+                - Devolvé ÚNICAMENTE el bloque JSON crudo sin bloques markdown ```json ``` ni texto adicional.
+                - La suma de opciones debe ser exactamente 4 (para single choice) con ponderaciones decrecientes.
+                """.formatted(
+                peticion.nombreCompetencia(),
+                peticion.nombreFactor(),
+                peticion.nombrePregunta() != null ? peticion.nombrePregunta() : "",
+                peticion.descripcion() != null ? peticion.descripcion() : "",
+                peticion.contextoExtra() != null ? peticion.contextoExtra() : "Sin contexto adicional"
+        );
 
         Map<String, Object> body = Map.of(
-                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+                "contents", List.of(
+                        Map.of("parts", List.of(
+                                Map.of("text", prompt)
+                        ))
+                ),
+                "generationConfig", Map.of(
+                        "response_mime_type", "application/json",
+                        "temperature", 0.7
+                )
+        );
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
 
         try {
-            String response = restTemplate.postForObject(url, entity, String.class);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    GEMINI_API_URL + geminiApiKey,
+                    HttpMethod.POST,
+                    entity,
+                    Map.class
+            );
 
-            JsonNode root = objectMapper.readTree(response);
-            String aiTextResponse = root.path("candidates").get(0).path("content").path("parts").get(0).path("text")
-                    .asString();
+            Map<String, Object> responseBody = response.getBody();
+            if (responseBody == null) {
+                throw new RuntimeException("Respuesta vacía desde la API de Gemini.");
+            }
 
-            String cleanJson = aiTextResponse.replaceAll("(?i)```json", "").replaceAll("```", "").trim();
+            List<Map<String, Object>> candidates = (List<Map<String, Object>>) responseBody.get("candidates");
+            Map<String, Object> firstCandidate = candidates.get(0);
+            Map<String, Object> content = (Map<String, Object>) firstCandidate.get("content");
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
+            String jsonText = (String) parts.get(0).get("text");
 
-            return objectMapper.readValue(cleanJson, GenerarPreguntaResponse.class);
+            return objectMapper.readValue(jsonText, PreguntaDTO.IaRespuesta.class);
 
         } catch (Exception e) {
-            throw new RuntimeException("Falló la generación con IA: " + e.getMessage());
+            throw new RuntimeException("Error al comunicarse con el servicio de IA de Gemini: " + e.getMessage(), e);
         }
     }
 }

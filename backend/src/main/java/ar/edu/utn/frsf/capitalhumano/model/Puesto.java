@@ -17,70 +17,21 @@ public class Puesto {
     private Long id;
 
     @Column(name = "codigo")
-    private String code;
+    private String codigo;
 
     @Column(name = "nombre")
-    private String name;
+    private String nombre;
 
     @Column(name = "descripcion")
-    private String description;
+    private String descripcion;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "company_id")
-    private Empresa company;
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
-    @OneToMany(mappedBy = "position", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<PuestoCompetencia> competencies = new ArrayList<>();
-
-    // Métodos en español
-    public String getCodigo() {
-        return code;
-    }
-
-    public void setCodigo(String codigo) {
-        this.code = codigo;
-    }
-
-    public String getNombre() {
-        return name;
-    }
-
-    public void setNombre(String nombre) {
-        this.name = nombre;
-    }
-
-    public String getDescripcion() {
-        return description;
-    }
-
-    public void setDescripcion(String descripcion) {
-        this.description = descripcion;
-    }
-
-    public LocalDateTime getFechaBaja() {
-        return deletedAt;
-    }
-
-    public void setFechaBaja(LocalDateTime fechaBaja) {
-        this.deletedAt = fechaBaja;
-    }
-
-    public Empresa getEmpresa() {
-        return company;
-    }
-
-    public void setEmpresa(Empresa empresa) {
-        this.company = empresa;
-    }
-
-    public List<PuestoCompetencia> getCompetencias() {
-        return competencies;
-    }
-
-    public void setCompetencias(List<PuestoCompetencia> competencias) {
-        this.competencies = competencias;
-    }
+    @OneToMany(mappedBy = "puesto", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PuestoCompetencia> competencias = new ArrayList<>();
 }

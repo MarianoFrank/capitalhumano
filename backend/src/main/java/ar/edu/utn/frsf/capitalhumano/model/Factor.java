@@ -23,71 +23,22 @@ public class Factor {
 
     // Relación con Competencia
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "competency_id", nullable = false)
+    @JoinColumn(name = "competencia_id", nullable = false)
     @JsonIgnore
-    private Competencia competency;
+    private Competencia competencia;
 
     @Column(name = "codigo", unique = true, nullable = false)
-    private String code;
+    private String codigo;
 
     @Column(name = "nombre", nullable = false)
-    private String name;
+    private String nombre;
 
     @Column(name = "descripcion", columnDefinition = "TEXT")
-    private String description;
+    private String descripcion;
 
-    @Column(name = "order_number", nullable = false)
-    private Integer orderNumber;
+    @Column(name = "numero_orden", nullable = false)
+    private Integer numeroOrden;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    // Métodos en español
-    public Competencia getCompetencia() {
-        return competency;
-    }
-
-    public void setCompetencia(Competencia competencia) {
-        this.competency = competencia;
-    }
-
-    public String getCodigo() {
-        return code;
-    }
-
-    public void setCodigo(String codigo) {
-        this.code = codigo;
-    }
-
-    public String getNombre() {
-        return name;
-    }
-
-    public void setNombre(String nombre) {
-        this.name = nombre;
-    }
-
-    public String getDescripcion() {
-        return description;
-    }
-
-    public void setDescripcion(String descripcion) {
-        this.description = descripcion;
-    }
-
-    public Integer getNumeroOrden() {
-        return orderNumber;
-    }
-
-    public void setNumeroOrden(Integer numeroOrden) {
-        this.orderNumber = numeroOrden;
-    }
-
-    public LocalDateTime getFechaBaja() {
-        return deletedAt;
-    }
-
-    public void setFechaBaja(LocalDateTime fechaBaja) {
-        this.deletedAt = fechaBaja;
-    }
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
 }

@@ -15,24 +15,8 @@ public class Empresa {
     private Long id;
 
     @Column(name = "nombre")
-    private String name;
+    private String nombre;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
-
-    public String getNombre() {
-        return name;
-    }
-
-    public void setNombre(String nombre) {
-        this.name = nombre;
-    }
-
-    public LocalDateTime getFechaBaja() {
-        return deletedAt;
-    }
-
-    public void setFechaBaja(LocalDateTime fechaBaja) {
-        this.deletedAt = fechaBaja;
-    }
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
 }

@@ -1,78 +1,72 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
-import ar.edu.utn.frsf.capitalhumano.dto.request.PreguntaRequest;
-import ar.edu.utn.frsf.capitalhumano.dto.response.PreguntaDetalleResponse;
-import ar.edu.utn.frsf.capitalhumano.dto.response.PreguntaResumenResponse;
+import ar.edu.utn.frsf.capitalhumano.dto.PreguntaDTO;
+import ar.edu.utn.frsf.capitalhumano.service.IaGeneracionService;
 import ar.edu.utn.frsf.capitalhumano.service.PreguntaService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
-
-import java.util.Map;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/preguntas")
-@Validated
 public class PreguntaController {
 
     private final PreguntaService preguntaService;
+    private final IaGeneracionService iaGeneracionService;
 
-    public PreguntaController(PreguntaService preguntaService) {
+    public PreguntaController(PreguntaService preguntaService, IaGeneracionService iaGeneracionService) {
         this.preguntaService = preguntaService;
+        this.iaGeneracionService = iaGeneracionService;
     }
 
-    // Endpoint Liviano (para la tabla principal)
     @GetMapping
-    public ResponseEntity<Page<PreguntaResumenResponse>> obtenerPreguntas(
+    public ResponseEntity<Page<PreguntaDTO.Resumen>> obtenerPaginados(
             @RequestParam(name = "idCompetencia", required = false) Long idCompetencia,
             @RequestParam(name = "idFactor", required = false) Long idFactor,
             @RequestParam(name = "nombrePregunta", required = false) String nombrePregunta,
-            Pageable pageable) {
+            @PageableDefault(size = 10, sort = "fechaModificacion", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        Page<PreguntaResumenResponse> preguntasPage = preguntaService.obtenerTodasLasPreguntasResumen(
+        Page<PreguntaDTO.Resumen> preguntas = preguntaService.obtenerTodasLasPreguntasResumen(
                 idCompetencia, idFactor, nombrePregunta, pageable);
-        return ResponseEntity.ok(preguntasPage);
+        return ResponseEntity.ok(preguntas);
     }
 
-    // Endpoint Detallado (para popular el formulario al modificar)
     @GetMapping("/{id}")
-    public ResponseEntity<PreguntaDetalleResponse> obtenerPreguntaPorId(
-            @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
-        PreguntaDetalleResponse preguntaDetalle = preguntaService.obtenerPreguntaPorId(id);
-        return ResponseEntity.ok(preguntaDetalle);
+    public ResponseEntity<PreguntaDTO.Detalle> obtenerPorId(@PathVariable Long id) {
+        PreguntaDTO.Detalle pregunta = preguntaService.obtenerPreguntaPorId(id);
+        return ResponseEntity.ok(pregunta);
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> crearPregunta(@Valid @RequestBody PreguntaRequest peticionDTO) {
-        preguntaService.crearPregunta(peticionDTO);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                "message", "Pregunta creada correctamente"));
+    public ResponseEntity<PreguntaDTO.Detalle> crear(@Valid @RequestBody PreguntaDTO.Guardar peticion) {
+        var creada = preguntaService.crearPregunta(peticion);
+        PreguntaDTO.Detalle detalle = preguntaService.obtenerPreguntaPorId(creada.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(detalle);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> actualizarPregunta(
-            @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id,
-            @Valid @RequestBody PreguntaRequest peticionDTO) {
-        preguntaService.actualizarPregunta(id, peticionDTO);
-
-        return ResponseEntity.status(HttpStatus.OK).body(Map.of(
-                "message", "Pregunta actualizada correctamente"));
+    public ResponseEntity<PreguntaDTO.Detalle> actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody PreguntaDTO.Guardar peticion) {
+        var actualizada = preguntaService.actualizarPregunta(id, peticion);
+        PreguntaDTO.Detalle detalle = preguntaService.obtenerPreguntaPorId(actualizada.getId());
+        return ResponseEntity.ok(detalle);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarPregunta(
-            @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
-
+    public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         preguntaService.eliminarPregunta(id);
+        return ResponseEntity.noContent().build();
+    }
 
-        return ResponseEntity.status(HttpStatus.OK).body(Map.of(
-                "message", "Pregunta dada de baja correctamente"));
+    @PostMapping("/generar-ia")
+    public ResponseEntity<PreguntaDTO.IaRespuesta> generarPreguntaIa(@Valid @RequestBody PreguntaDTO.IaPeticion peticion) {
+        PreguntaDTO.IaRespuesta respuesta = iaGeneracionService.generarPregunta(peticion);
+        return ResponseEntity.ok(respuesta);
     }
 }

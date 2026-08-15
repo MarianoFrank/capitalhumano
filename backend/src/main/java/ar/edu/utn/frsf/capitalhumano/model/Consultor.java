@@ -21,7 +21,7 @@ public class Consultor implements UserDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "username", unique = true, nullable = false)
+    @Column(name = "nombre_usuario", unique = true, nullable = false)
     private String username;
 
     // --- Métodos de UserDetails ---
