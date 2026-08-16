@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-scale max 3500 width
+scale max 4000 width
 
 ' ==========================================
 ' CONFIGURACIONES VISUALES Y ESTILOS
@@ -89,6 +89,23 @@ package "Servicios del Sistema" {
         + obtenerCandidatosPaginados(nombre: String, apellido: String, nro: Long): List<Candidato>
     }
 
+    class ServicioPuesto <<Servicio>> {
+        + buscarPuestos(codigo: String, nombre: String, idEmpresa: Long): List<PuestoResumenDTO>
+        + obtenerPuestoPorId(id: Long): Puesto
+        + darDeAltaPuesto(datos: AltaPuestoDTO): Puesto
+        - validarUnicidad(codigo: String, nombre: String): void
+        - validarPonderaciones(caracteristicas: List<CompetenciaPuestoDTO>): void
+    }
+
+    class ServicioPregunta <<Servicio>> {
+        + buscarPreguntas(idCompetencia: Long, idFactor: Long, nombre: String): List<PreguntaResumenDTO>
+        + obtenerPreguntaPorId(id: Long): PreguntaDetalleDTO
+        + darDeAltaPregunta(datos: AltaPreguntaDTO): Pregunta
+        + darDeBajaPregunta(idPregunta: Long, usuarioConsultor: String): void
+        - validarUnicidad(nombre: String, texto: String, idFactor: Long): void
+        - validarPonderacionesOpciones(opciones: List<OpcionPreguntaDTO>): void
+    }
+
     class ServicioEvaluacion <<Servicio>> {
         + crearEvaluacion(idPuesto: Long, idsCandidatos: List<Long>): List<ClaveEvaluacionCandidatoDTO>
         - generarClaveAcceso(): String
@@ -104,9 +121,12 @@ package "Servicios del Sistema" {
 
     class ServicioReporte <<Servicio>> {
         + emitirOrdenDeMerito(idPuesto: Long, idEval: Long): ReporteOrdenMeritoDTO
+        + emitirReporteComparativo(idPuesto: Long, idCandidato: Long): ReporteComparativoDTO
         + obtenerResumenPosiciones(): List<ResumenPosicionDTO>
         + obtenerResumenEvaluaciones(idPuesto: Long): List<ResumenEvaluacionDTO>
+        + obtenerCandidatosEvaluadosPorPuesto(idPuesto: Long): List<CandidatoEvaluadoDTO>
         - cumpleRequisitosMinimos(cuestionario: Cuestionario, puesto: Puesto): Boolean
+        - calcularComparativaCompetencias(cuestionario: Cuestionario, puesto: Puesto): List<ComparativaCompetenciaDTO>
     }
 
     class ServicioIA <<Servicio>> {
@@ -149,16 +169,25 @@ package "Acceso a Datos (DAOs)" {
         + buscarPorClaveAcceso(clave: String): Cuestionario
         + buscarPorEvaluacion(idEval: Long): List<Cuestionario>
         + buscarPorPuestoEvaluacion(idPuesto: Long): List<Cuestionario>
+        + buscarCompletosPorPuesto(idPuesto: Long): List<Cuestionario>
+        + buscarCompletadoPorPuestoYCandidato(idPuesto: Long, idCandidato: Long): Cuestionario
         + buscarVencidos(fecha: DateTime, estados: List<EstadoCuestionario>): List<Cuestionario>
     }
 
     interface PreguntaDAO <<DAO>> {
         + buscarActivasPorFactor(idFactor: Long): List<Pregunta>
+        + buscarFiltrado(idComp: Long, idFactor: Long, nombre: String): List<Pregunta>
+        + buscarActivaPorId(id: Long): Pregunta
         + contarPorFactor(idFactor: Long): Long
+        + existePorNombreYFactor(nombre: String, idFactor: Long): Boolean
+        + existePorTextoYFactor(texto: String, idFactor: Long): Boolean
     }
 
     interface PuestoDAO <<DAO>> {
         + buscarActivos(): List<Puesto>
+        + buscarFiltrado(codigo: String, nombre: String, idEmpresa: Long): List<Puesto>
+        + existePorCodigo(codigo: String): Boolean
+        + existePorNombre(nombre: String): Boolean
     }
 
     interface CompetenciaDAO <<DAO>> {
@@ -270,6 +299,91 @@ package "Objetos de Transferencia de Datos (DTOs)" {
         + texto: String
         + ponderacion: Integer
     }
+
+    class AltaPuestoDTO <<DTO>> {
+        + codigo: String
+        + nombre: String
+        + descripcion: String
+        + idEmpresa: Long
+        + caracteristicas: List<CompetenciaPuestoDTO>
+    }
+
+    class CompetenciaPuestoDTO <<DTO>> {
+        + idCompetencia: Long
+        + ponderacionRequerida: Integer
+    }
+
+    class PuestoResumenDTO <<DTO>> {
+        + id: Long
+        + codigo: String
+        + nombre: String
+        + nombreEmpresa: String
+    }
+
+    class AltaPreguntaDTO <<DTO>> {
+        + idFactor: Long
+        + nombre: String
+        + texto: String
+        + descripcion: String
+        + tipo: TipoPregunta
+        + opciones: List<OpcionPreguntaDTO>
+    }
+
+    class OpcionPreguntaDTO <<DTO>> {
+        + ordenVisualizacion: Integer
+        + ponderacion: Integer
+        + texto: String
+    }
+
+    class PreguntaResumenDTO <<DTO>> {
+        + id: Long
+        + nombreCompetencia: String
+        + nombreFactor: String
+        + nombrePregunta: String
+        + fechaModificacion: DateTime
+    }
+
+    class PreguntaDetalleDTO <<DTO>> {
+        + id: Long
+        + idFactor: Long
+        + nombre: String
+        + texto: String
+        + descripcion: String
+        + tipo: TipoPregunta
+        + opciones: List<OpcionPreguntaDTO>
+    }
+
+    class ReporteComparativoDTO <<DTO>> {
+        + nombreEmpresa: String
+        + nombrePuesto: String
+        + descripcionPuesto: String
+        + nombreCandidato: String
+        + apellidoCandidato: String
+        + tipoDocumento: String
+        + nroDocumento: String
+        + nroCandidato: String
+        + fechaEvaluacion: DateTime
+        + emitidoPor: String
+        + fechaEmision: DateTime
+        + competencias: List<ComparativaCompetenciaDTO>
+    }
+
+    class ComparativaCompetenciaDTO <<DTO>> {
+        + nombreCompetencia: String
+        + puntajeRequerido: Double
+        + puntajeObtenido: Double
+        + diferencia: Double
+    }
+
+    class CandidatoEvaluadoDTO <<DTO>> {
+        + idCandidato: Long
+        + nroCandidato: String
+        + nombre: String
+        + apellido: String
+        + tipoDocumento: String
+        + nroDocumento: String
+        + fechaFinalizacion: DateTime
+    }
 }
 
 ' ==========================================
@@ -344,6 +458,7 @@ package "Dominio" {
         - texto: String
         - descripcion: String
         - tipo: TipoPregunta
+        - fechaModificacion: DateTime
         - fechaBaja: Date
     }
 
@@ -409,11 +524,19 @@ DAO <|-- EmpresaDAO
 DAO <|-- ConsultorDAO
 DAO <|-- AuditoriaDAO
 
-' --- Servicios -> DAOs ---
+' --- Servicios -> DAOs y Otros Servicios ---
 ServicioSeguridad ..> ConsultorDAO : "valida usuario"
 ServicioSeguridad ..> CuestionarioDAO : "valida acceso"
 
 ServicioCandidato ..> CandidatoDAO : "consulta / persiste"
+
+ServicioPuesto ..> PuestoDAO : "consulta / persiste"
+ServicioPuesto ..> EmpresaDAO : "valida empresa"
+ServicioPuesto ..> CompetenciaDAO : "valida competencias"
+
+ServicioPregunta ..> PreguntaDAO : "consulta / persiste"
+ServicioPregunta ..> FactorDAO : "valida factor"
+ServicioPregunta ..> ServicioAuditoria : "registra auditoría"
 
 ServicioEvaluacion ..> PuestoDAO : "valida puesto"
 ServicioEvaluacion ..> CompetenciaDAO : "valida ponderaciones"
@@ -428,19 +551,33 @@ ServicioCuestionario ..> PreguntaDAO : "obtiene preguntas activas"
 ServicioReporte ..> PuestoDAO : "obtiene puesto"
 ServicioReporte ..> EvaluacionDAO : "obtiene evaluaciones"
 ServicioReporte ..> CuestionarioDAO : "obtiene cuestionarios y puntajes"
+ServicioReporte ..> CandidatoDAO : "obtiene candidatos"
 
 ServicioAuditoria ..> AuditoriaDAO : "registra auditoría"
 
 ' --- Servicios -> DTOs Esenciales de Negocio ---
+ServicioPuesto ..> AltaPuestoDTO : "procesa <"
+ServicioPuesto ..> PuestoResumenDTO : "retorna >"
+
+ServicioPregunta ..> AltaPreguntaDTO : "procesa <"
+ServicioPregunta ..> PreguntaResumenDTO : "retorna >"
+ServicioPregunta ..> PreguntaDetalleDTO : "retorna >"
+
 ServicioEvaluacion ..> ClaveEvaluacionCandidatoDTO : "retorna >"
 ServicioCuestionario ..> InicioCuestionarioDTO : "retorna >"
 ServicioCuestionario ..> BloquePreguntasDTO : "retorna >"
 ServicioReporte ..> ReporteOrdenMeritoDTO : "emite >"
+ServicioReporte ..> ReporteComparativoDTO : "emite >"
 ServicioReporte ..> ResumenPosicionDTO : "retorna >"
 ServicioReporte ..> ResumenEvaluacionDTO : "retorna >"
+ServicioReporte ..> CandidatoEvaluadoDTO : "retorna >"
 ServicioIA ..> PreguntaGeneradaIADTO : "genera >"
 
 ' --- Estructura interna de DTOs ---
+AltaPuestoDTO "1" *-- "1..*" CompetenciaPuestoDTO
+AltaPreguntaDTO "1" *-- "2..*" OpcionPreguntaDTO
+PreguntaDetalleDTO "1" *-- "2..*" OpcionPreguntaDTO
+ReporteComparativoDTO "1" *-- "1..*" ComparativaCompetenciaDTO
 BloquePreguntasDTO "1" *-- "1..*" ItemPreguntaDTO
 ItemPreguntaDTO "1" *-- "2..*" ItemOpcionDTO
 ReporteOrdenMeritoDTO "1" *-- "0..*" CandidatoResultadoDTO
