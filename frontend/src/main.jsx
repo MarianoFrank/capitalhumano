@@ -9,7 +9,7 @@ import 'primeicons/primeicons.css';
 import './index.css';
 
 import App from './App.jsx';
-import { ProveedorApp } from './context/ContextoApp.jsx';
+import { ProveedorApp } from './context';
 
 const root = createRoot(document.getElementById('root'));
 

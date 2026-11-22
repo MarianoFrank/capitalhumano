@@ -2,13 +2,13 @@ import { Menu } from 'primereact/menu';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Avatar } from 'primereact/avatar';
 import { Button } from 'primereact/button';
-import { useAutenticacion, useTema } from '../context/ContextoApp';
+import { useAuth, useTema } from '../context';
 
-export const BarraLateral = () => {
+export default function BarraLateral() {
     const { esOscuro, alternarTema } = useTema();
     const navigate = useNavigate();
     const location = useLocation();
-    const { usuario, cerrarSesion } = useAutenticacion();
+    const { usuario, cerrarSesion } = useAuth();
 
     const estaActivo = (ruta) => location.pathname === ruta;
 
@@ -58,7 +58,6 @@ export const BarraLateral = () => {
 
     return (
         <div className="h-screen flex flex-column surface-card surface-border border-right-1 select-none" style={{ width: '260px', minWidth: '260px' }}>
-            {/* --- LOGO --- */}
             <div className="p-4 hover:surface-hover transition-colors cursor-pointer" onClick={() => navigate('/inicio')}>
                 <div className="flex align-items-center gap-3 px-1">
                     <div className="flex align-items-center justify-content-center w-3rem h-3rem border-round border-1 surface-border surface-ground">
@@ -70,7 +69,6 @@ export const BarraLateral = () => {
                 </div>
             </div>
 
-            {/* --- MENÚ --- */}
             <div className="flex-grow-1 overflow-auto pt-2">
                 <Menu
                     model={elementosConsultor}
@@ -85,7 +83,6 @@ export const BarraLateral = () => {
                 />
             </div>
 
-            {/* --- FOOTER DE USUARIO --- */}
             <div className="p-3 border-top-1 surface-border surface-ground">
                 <div className="flex align-items-center justify-content-between px-1 gap-3">
                     <div className="flex align-items-center gap-3">
@@ -133,7 +130,4 @@ export const BarraLateral = () => {
             </div>
         </div>
     );
-};
-
-export const Sidebar = BarraLateral;
-export default BarraLateral;
+}

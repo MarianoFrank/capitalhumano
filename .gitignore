@@ -10,7 +10,7 @@
 **/.env.*
 !**/.env.example
 
-# --- OS & Editors ---
+# --- OS, Editors & Tooling ---
 .DS_Store
 Thumbs.db
 *.sw?
@@ -20,10 +20,8 @@ Thumbs.db
 *.iws
 *.iml
 *.ipr
-.vscode/*
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/settings.json
+.vscode/
+.github/
 
 # --- Backend (Java / Spring Boot / Maven) ---
 backend/target/
