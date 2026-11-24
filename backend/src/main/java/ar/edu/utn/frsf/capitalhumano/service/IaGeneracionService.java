@@ -12,6 +12,7 @@ public class IaGeneracionService {
     private static final String SYSTEM_PROMPT = """
             Sos un psicotécnico y especialista en Recursos Humanos experto en el modelo de evaluación por competencias.
             Tu objetivo es diseñar preguntas situacionales y conductuales de alto impacto para procesos de selección de talento.
+            El tipo de pregunta debe ser siempre SINGLE_CHOICE (selección única).
             Debes generar exactamente 4 opciones de respuesta con ponderaciones decrecientes:
             - 10 puntos: Opción óptima que refleja la conducta y desempeño esperado ideal.
             - 6 puntos: Opción adecuada o estándar con margen de mejora.

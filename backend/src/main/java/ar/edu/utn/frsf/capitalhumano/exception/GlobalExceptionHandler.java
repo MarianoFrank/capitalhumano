@@ -14,6 +14,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -103,6 +104,20 @@ public class GlobalExceptionHandler {
                 status.value(),
                 status.getReasonPhrase(),
                 "El cuerpo de la solicitud no es legible o tiene un formato incorrecto.",
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
+    }
+
+    // Maneja entidades no encontradas por ID (HTTP 404 Not Found)
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<ApiErrorResponse> handleNoSuchElementException(
+            NoSuchElementException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.NOT_FOUND;
+        String errorMessage = ex.getMessage() != null ? ex.getMessage() : "Recurso no encontrado.";
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                errorMessage,
                 request.getRequestURI());
         return ResponseEntity.status(status).body(body);
     }

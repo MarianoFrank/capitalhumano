@@ -1,5 +1,7 @@
 package ar.edu.utn.frsf.capitalhumano.dto;
 
+import ar.edu.utn.frsf.capitalhumano.model.Opcion;
+import ar.edu.utn.frsf.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoPregunta;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
@@ -9,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 public final class PreguntaDTO {
@@ -52,34 +55,6 @@ public final class PreguntaDTO {
             String texto
     ) {}
 
-    // Respuesta: Vista detallada de una pregunta existente
-    public record Detalle(
-            Long id,
-            Long idFactor,
-            String nombre,
-            String texto,
-            String descripcion,
-            TipoPregunta tipo,
-            List<OpcionDetalle> opciones
-    ) {}
-
-    // Respuesta: Detalle de una opción de respuesta
-    public record OpcionDetalle(
-            Long id,
-            Integer ordenVisualizacion,
-            Integer ponderacion,
-            String texto
-    ) {}
-
-    // Respuesta: Resumen para la grilla de administración de preguntas
-    public record Resumen(
-            Long id,
-            @JsonFormat(pattern = "dd/MM/yyyy HH:mm") LocalDateTime fechaModificacion,
-            String nombreCompetencia,
-            String nombreFactor,
-            String nombrePregunta
-    ) {}
-
     // Petición: Solicitud de generación asistida a la IA
     public record IaPeticion(
             String nombreCompetencia,
@@ -89,11 +64,61 @@ public final class PreguntaDTO {
             String contextoExtra
     ) {}
 
+    // Respuesta: Resumen para la grilla de administración de preguntas
+    public record Resumen(
+            Long id,
+            @JsonFormat(pattern = "dd/MM/yyyy HH:mm") LocalDateTime fechaModificacion,
+            String nombreCompetencia,
+            String nombreFactor,
+            String nombrePregunta
+    ) {
+        public static Resumen from(Pregunta p) {
+            if (p == null) return null;
+            String competencia = (p.getFactor() != null && p.getFactor().getCompetencia() != null)
+                    ? p.getFactor().getCompetencia().getNombre() : null;
+            String factor = (p.getFactor() != null) ? p.getFactor().getNombre() : null;
+            return new Resumen(p.getId(), p.getFechaModificacion(), competencia, factor, p.getNombre());
+        }
+    }
+
+    // Respuesta: Vista detallada de una pregunta existente
+    public record Detalle(
+            Long id,
+            Long idFactor,
+            String nombre,
+            String texto,
+            String descripcion,
+            TipoPregunta tipo,
+            List<OpcionDetalle> opciones
+    ) {
+        public static Detalle from(Pregunta p) {
+            if (p == null) return null;
+            List<OpcionDetalle> ops = (p.getOpciones() != null)
+                    ? p.getOpciones().stream().map(OpcionDetalle::from).toList()
+                    : Collections.emptyList();
+            Long factorId = (p.getFactor() != null) ? p.getFactor().getId() : null;
+            return new Detalle(p.getId(), factorId, p.getNombre(), p.getTexto(), p.getDescripcion(), p.getTipo(), ops);
+        }
+    }
+
+    // Respuesta: Detalle de una opción de respuesta
+    public record OpcionDetalle(
+            Long id,
+            Integer ordenVisualizacion,
+            Integer ponderacion,
+            String texto
+    ) {
+        public static OpcionDetalle from(Opcion o) {
+            if (o == null) return null;
+            return new OpcionDetalle(o.getId(), o.getOrdenVisualizacion(), o.getPonderacion(), o.getTexto());
+        }
+    }
+
     // Respuesta: Pregunta sugerida por la IA
     public record IaRespuesta(
             String nombrePregunta,
             String descripcion,
-            String tipo,
+            TipoPregunta tipo,
             String texto,
             List<OpcionGenerada> opciones
     ) {}

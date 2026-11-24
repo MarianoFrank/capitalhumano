@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.EvaluacionDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.EvaluacionMapper;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.CandidatoRepository;
@@ -31,7 +30,6 @@ public class EvaluacionService {
     private final CuestionarioRepository cuestionarioRepository;
     private final ConsultorRepository consultorRepository;
     private final PreguntaRepository preguntaRepository;
-    private final EvaluacionMapper evaluacionMapper;
 
     private static final String CARACTERES_CLAVE = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int LONGITUD_CLAVE = 8;
@@ -43,15 +41,13 @@ public class EvaluacionService {
             CandidatoRepository candidatoRepository,
             CuestionarioRepository cuestionarioRepository,
             ConsultorRepository consultorRepository,
-            PreguntaRepository preguntaRepository,
-            EvaluacionMapper evaluacionMapper) {
+            PreguntaRepository preguntaRepository) {
         this.evaluacionRepository = evaluacionRepository;
         this.puestoRepository = puestoRepository;
         this.candidatoRepository = candidatoRepository;
         this.cuestionarioRepository = cuestionarioRepository;
         this.consultorRepository = consultorRepository;
         this.preguntaRepository = preguntaRepository;
-        this.evaluacionMapper = evaluacionMapper;
     }
 
     @Transactional
@@ -97,7 +93,7 @@ public class EvaluacionService {
 
             cuestionarioRepository.save(cuestionario);
 
-            clavesGeneradas.add(evaluacionMapper.aClaveGenerada(candidato, claveAcceso));
+            clavesGeneradas.add(EvaluacionDTO.ClaveGenerada.from(candidato, claveAcceso));
         }
 
         return clavesGeneradas;
@@ -149,38 +145,35 @@ public class EvaluacionService {
             Bloque bloque = new Bloque();
             bloque.setCuestionario(cuestionario);
             bloque.setNumeroBloque(numeroBloque++);
-            bloque.setItemsPregunta(new ArrayList<>());
 
+            List<ItemPregunta> itemsPregunta = new ArrayList<>();
             int ordenPregunta = 1;
-            for (Pregunta preg : preguntasBloque) {
+
+            for (Pregunta pregunta : preguntasBloque) {
                 ItemPregunta itemPregunta = new ItemPregunta();
                 itemPregunta.setBloque(bloque);
-                itemPregunta.setPregunta(preg);
+                itemPregunta.setPregunta(pregunta);
                 itemPregunta.setOrdenVisualizacion(ordenPregunta++);
-                itemPregunta.setItemsOpcion(new ArrayList<>());
 
-                if (preg.getOpciones() != null) {
-                    for (Opcion opc : preg.getOpciones()) {
+                List<ItemOpcion> itemsOpcion = new ArrayList<>();
+                if (pregunta.getOpciones() != null) {
+                    for (Opcion opcion : pregunta.getOpciones()) {
                         ItemOpcion itemOpcion = new ItemOpcion();
                         itemOpcion.setItemPregunta(itemPregunta);
-                        itemOpcion.setOpcion(opc);
+                        itemOpcion.setOpcion(opcion);
                         itemOpcion.setEstaRespondida(false);
-                        itemPregunta.getItemsOpcion().add(itemOpcion);
+                        itemsOpcion.add(itemOpcion);
                     }
                 }
-
-                bloque.getItemsPregunta().add(itemPregunta);
+                itemPregunta.setItemsOpcion(itemsOpcion);
+                itemsPregunta.add(itemPregunta);
             }
 
+            bloque.setItemsPregunta(itemsPregunta);
             bloques.add(bloque);
         }
 
-        if (cuestionario.getBloques() != null) {
-            cuestionario.getBloques().clear();
-            cuestionario.getBloques().addAll(bloques);
-        } else {
-            cuestionario.setBloques(new ArrayList<>(bloques));
-        }
+        cuestionario.setBloques(bloques);
     }
 
     private String generarClaveAccesoUnica() {

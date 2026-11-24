@@ -1,6 +1,7 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.PreguntaDTO;
+import ar.edu.utn.frsf.capitalhumano.model.enums.TipoPregunta;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +45,7 @@ class IaGeneracionServiceTest {
         PreguntaDTO.IaRespuesta mockRespuesta = new PreguntaDTO.IaRespuesta(
                 "Pregunta de Liderazgo",
                 "Evalúa resolución de conflictos",
-                "SINGLE_CHOICE",
+                TipoPregunta.SINGLE_CHOICE,
                 "¿Cómo actuarías ante un desacuerdo en el equipo?",
                 List.of(
                         new PreguntaDTO.OpcionGenerada("Facilito una reunión de diálogo abierta", 10),
@@ -70,7 +71,7 @@ class IaGeneracionServiceTest {
 
         assertNotNull(respuesta);
         assertEquals("Pregunta de Liderazgo", respuesta.nombrePregunta());
-        assertEquals("SINGLE_CHOICE", respuesta.tipo());
+        assertEquals(TipoPregunta.SINGLE_CHOICE, respuesta.tipo());
         assertEquals(4, respuesta.opciones().size());
         assertEquals(10, respuesta.opciones().get(0).ponderacion());
         assertEquals(0, respuesta.opciones().get(3).ponderacion());

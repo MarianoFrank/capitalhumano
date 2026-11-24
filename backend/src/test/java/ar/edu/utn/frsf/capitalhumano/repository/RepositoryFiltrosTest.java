@@ -1,11 +1,10 @@
-package ar.edu.utn.frsf.capitalhumano.specification;
+package ar.edu.utn.frsf.capitalhumano.repository;
 
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.Genero;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoCompetencia;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoDocumento;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoPregunta;
-import ar.edu.utn.frsf.capitalhumano.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,16 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-class SpecificationsTest {
+class RepositoryFiltrosTest {
 
     @Autowired
     private CandidatoRepository candidatoRepository;
@@ -138,36 +135,31 @@ class SpecificationsTest {
     }
 
     @Test
-    @DisplayName("CandidatoSpecification - Filtros dinámicos combinados")
-    void testCandidatoSpecification() {
-        Specification<Candidato> spec1 = CandidatoSpecification.conFiltros("marian", null, null);
-        List<Candidato> res1 = candidatoRepository.findAll(spec1);
-        assertEquals(1, res1.size());
-        assertEquals("Mariano", res1.get(0).getNombre());
+    @DisplayName("CandidatoRepository - buscarConFiltros por nombre, apellido y número")
+    void testCandidatoBuscarConFiltros() {
+        Page<Candidato> res1 = candidatoRepository.buscarConFiltros("marian", null, null, PageRequest.of(0, 10));
+        assertEquals(1, res1.getTotalElements());
+        assertEquals("Mariano", res1.getContent().get(0).getNombre());
 
-        Specification<Candidato> spec2 = CandidatoSpecification.conFiltros(null, "Fernandez", null);
-        List<Candidato> res2 = candidatoRepository.findAll(spec2);
-        assertEquals(1, res2.size());
-        assertEquals("Lucia", res2.get(0).getNombre());
+        Page<Candidato> res2 = candidatoRepository.buscarConFiltros(null, "Fernandez", null, PageRequest.of(0, 10));
+        assertEquals(1, res2.getTotalElements());
+        assertEquals("Lucia", res2.getContent().get(0).getNombre());
 
-        Specification<Candidato> spec3 = CandidatoSpecification.conFiltros(null, null, 101L);
-        List<Candidato> res3 = candidatoRepository.findAll(spec3);
-        assertEquals(1, res3.size());
-        assertEquals(101L, res3.get(0).getNumeroCandidato());
+        Page<Candidato> res3 = candidatoRepository.buscarConFiltros(null, null, 101L, PageRequest.of(0, 10));
+        assertEquals(1, res3.getTotalElements());
+        assertEquals(101L, res3.getContent().get(0).getNumeroCandidato());
 
-        Specification<Candidato> spec4 = CandidatoSpecification.conFiltros(null, null, null);
-        List<Candidato> res4 = candidatoRepository.findAll(spec4);
-        assertEquals(2, res4.size());
+        Page<Candidato> res4 = candidatoRepository.buscarConFiltros(null, null, null, PageRequest.of(0, 10));
+        assertEquals(2, res4.getTotalElements());
     }
 
     @Test
-    @DisplayName("PreguntaSpecification - Filtrado por competencia, factor, nombre y no eliminadas")
-    void testPreguntaSpecification() {
+    @DisplayName("PreguntaRepository - buscarConFiltros por competencia, factor y nombre")
+    void testPreguntaBuscarConFiltros() {
         Competencia comp = competenciaRepository.findAll().get(0);
         Factor fact = factorRepository.findAll().get(0);
 
-        Specification<Pregunta> spec = PreguntaSpecification.conFiltros(comp.getId(), fact.getId(), "cambios");
-        Page<Pregunta> page = preguntaRepository.findAll(spec, PageRequest.of(0, 10));
+        Page<Pregunta> page = preguntaRepository.buscarConFiltros(comp.getId(), fact.getId(), "cambios", PageRequest.of(0, 10));
 
         assertEquals(1, page.getTotalElements());
         assertEquals("¿Cómo maneja los cambios de planes?", page.getContent().get(0).getNombre());
@@ -175,26 +167,13 @@ class SpecificationsTest {
     }
 
     @Test
-    @DisplayName("PuestoSpecification - Filtrado por empresa, código, nombre y verificación de evaluaciones")
-    void testPuestoSpecification() {
+    @DisplayName("PuestoRepository - buscarParaReporte por empresa, código y nombre")
+    void testPuestoBuscarParaReporte() {
         Empresa emp = empresaRepository.findAll().get(0);
 
-        Specification<Puesto> spec = PuestoSpecification.conFiltrosReporte(emp.getId(), "Fullstack", "PST-01");
-        Page<Puesto> page = puestoRepository.findAll(spec, PageRequest.of(0, 10));
+        Page<Puesto> page = puestoRepository.buscarParaReporte(emp.getId(), "Fullstack", "PST-01", PageRequest.of(0, 10));
 
         assertEquals(1, page.getTotalElements());
         assertEquals("Desarrollador Fullstack", page.getContent().get(0).getNombre());
-    }
-
-    @Test
-    @DisplayName("FactorSpecification - Filtrado por competencia y no eliminados")
-    void testFactorSpecification() {
-        Competencia comp = competenciaRepository.findAll().get(0);
-
-        Specification<Factor> spec = FactorSpecification.conFiltros(comp.getId());
-        List<Factor> list = factorRepository.findAll(spec);
-
-        assertEquals(1, list.size());
-        assertEquals("Flexibilidad", list.get(0).getNombre());
     }
 }

@@ -3,7 +3,6 @@ package ar.edu.utn.frsf.capitalhumano.repository;
 import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface CuestionarioRepository extends JpaRepository<Cuestionario, Long>, JpaSpecificationExecutor<Cuestionario> {
+public interface CuestionarioRepository extends JpaRepository<Cuestionario, Long> {
 
     Optional<Cuestionario> findByClaveAcceso(String claveAcceso);
 

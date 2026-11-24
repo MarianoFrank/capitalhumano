@@ -1,16 +1,12 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
 import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
-import ar.edu.utn.frsf.capitalhumano.model.Consultor;
-import ar.edu.utn.frsf.capitalhumano.repository.ConsultorRepository;
 import ar.edu.utn.frsf.capitalhumano.security.JwtService;
 import ar.edu.utn.frsf.capitalhumano.security.SecurityService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,19 +16,13 @@ import java.util.Map;
 @RequestMapping("/api/autenticacion")
 public class AuthController {
 
-    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final SecurityService securityService;
-    private final ConsultorRepository consultorRepository;
 
-    public AuthController(AuthenticationManager authenticationManager,
-                          JwtService jwtService,
-                          ConsultorRepository consultorRepository,
+    public AuthController(JwtService jwtService,
                           SecurityService securityService) {
-        this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.securityService = securityService;
-        this.consultorRepository = consultorRepository;
     }
 
     public record IniciarSesion(
@@ -48,27 +38,19 @@ public class AuthController {
         }
 
         try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(peticion.usuario(), peticion.contrasenia()));
+            Map<String, Object> resultado = securityService.autenticarConsultor(
+                    peticion.usuario(), peticion.contrasenia());
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE, (String) resultado.get("cookie"))
+                    .body(Map.of(
+                            "message", "Consultor autenticado correctamente",
+                            "user", Map.of("username", resultado.get("username"), "role", "CONSULTANT")
+                    ));
         } catch (org.springframework.security.core.AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Usuario o contraseña incorrectos"));
         }
-
-        Consultor consultor = consultorRepository.findByUsername(peticion.usuario()).orElseGet(() -> {
-            Consultor nuevo = new Consultor();
-            nuevo.setUsername(peticion.usuario());
-            return consultorRepository.save(nuevo);
-        });
-
-        String accessToken = jwtService.generarToken(consultor.getUsername(), "CONSULTANT");
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, jwtService.generarJwtCookie(accessToken).toString())
-                .body(Map.of(
-                        "message", "Consultor autenticado correctamente",
-                        "user", Map.of("username", consultor.getUsername(), "role", "CONSULTANT")
-                ));
     }
 
     @PostMapping("/cerrar-sesion")

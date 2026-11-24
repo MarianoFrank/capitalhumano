@@ -9,6 +9,4 @@ import java.util.Optional;
 public interface ConsultorRepository extends JpaRepository<Consultor, Integer> {
 
     Optional<Consultor> findByUsername(String username);
-
-    boolean existsByUsername(String username);
 }

@@ -2,7 +2,6 @@ package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.CuestionarioDTO;
 import ar.edu.utn.frsf.capitalhumano.event.CuestionarioCompletadoEvent;
-import ar.edu.utn.frsf.capitalhumano.mapper.CuestionarioMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Bloque;
 import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.model.ItemOpcion;
@@ -21,16 +20,13 @@ import java.util.Map;
 public class CuestionarioService {
 
     private final CuestionarioRepository cuestionarioRepository;
-    private final CuestionarioMapper cuestionarioMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final EvaluacionService evaluacionService;
 
     public CuestionarioService(CuestionarioRepository cuestionarioRepository,
-                               CuestionarioMapper cuestionarioMapper,
                                ApplicationEventPublisher eventPublisher,
                                EvaluacionService evaluacionService) {
         this.cuestionarioRepository = cuestionarioRepository;
-        this.cuestionarioMapper = cuestionarioMapper;
         this.eventPublisher = eventPublisher;
         this.evaluacionService = evaluacionService;
     }
@@ -61,7 +57,7 @@ public class CuestionarioService {
         int totalBloques = cuestionario.getBloques().size();
         int bloqueActual = calcularBloqueActual(cuestionario);
 
-        return cuestionarioMapper.aInicio(cuestionario, totalBloques, bloqueActual);
+        return CuestionarioDTO.Inicio.from(cuestionario, totalBloques, bloqueActual);
     }
 
     @Transactional
@@ -89,7 +85,7 @@ public class CuestionarioService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Bloque no encontrado."));
 
-        return cuestionarioMapper.aBloque(bloque);
+        return CuestionarioDTO.Bloque.from(bloque);
     }
 
     private int calcularBloqueActual(Cuestionario cuestionario) {

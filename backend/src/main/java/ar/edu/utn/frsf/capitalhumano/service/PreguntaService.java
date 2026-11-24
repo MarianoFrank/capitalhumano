@@ -1,16 +1,13 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.PreguntaDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.PreguntaMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Factor;
 import ar.edu.utn.frsf.capitalhumano.model.Opcion;
 import ar.edu.utn.frsf.capitalhumano.model.Pregunta;
 import ar.edu.utn.frsf.capitalhumano.repository.FactorRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.PreguntaRepository;
-import ar.edu.utn.frsf.capitalhumano.specification.PreguntaSpecification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,32 +18,29 @@ public class PreguntaService {
 
     private final PreguntaRepository preguntaRepository;
     private final FactorRepository factorRepository;
-    private final PreguntaMapper preguntaMapper;
 
     public PreguntaService(PreguntaRepository preguntaRepository,
-                           FactorRepository factorRepository,
-                           PreguntaMapper preguntaMapper) {
+                           FactorRepository factorRepository) {
         this.preguntaRepository = preguntaRepository;
         this.factorRepository = factorRepository;
-        this.preguntaMapper = preguntaMapper;
     }
 
     public Page<PreguntaDTO.Resumen> obtenerTodasLasPreguntasResumen(
             Long idCompetencia, Long idFactor, String nombrePregunta, Pageable pageable) {
 
-        Specification<Pregunta> spec = PreguntaSpecification.conFiltros(idCompetencia, idFactor, nombrePregunta);
-        Page<Pregunta> preguntasPage = preguntaRepository.findAll(spec, pageable);
-        return preguntaMapper.aPaginaResumen(preguntasPage);
+        String nombreFiltro = (nombrePregunta != null && !nombrePregunta.isBlank()) ? nombrePregunta.trim() : null;
+        Page<Pregunta> preguntasPage = preguntaRepository.buscarConFiltros(idCompetencia, idFactor, nombreFiltro, pageable);
+        return preguntasPage.map(PreguntaDTO.Resumen::from);
     }
 
     public PreguntaDTO.Detalle obtenerPreguntaPorId(Long id) {
         Pregunta pregunta = preguntaRepository.findByIdAndFechaBajaIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Pregunta no encontrada con ID: " + id));
-        return preguntaMapper.aDetalle(pregunta);
+        return PreguntaDTO.Detalle.from(pregunta);
     }
 
     @Transactional
-    public Pregunta crearPregunta(PreguntaDTO.Guardar peticion) {
+    public PreguntaDTO.Detalle crearPregunta(PreguntaDTO.Guardar peticion) {
         Factor factor = factorRepository.findById(peticion.idFactor())
                 .orElseThrow(() -> new RuntimeException("Factor no encontrado con ID: " + peticion.idFactor()));
 
@@ -70,11 +64,12 @@ public class PreguntaService {
             }
         }
 
-        return preguntaRepository.save(pregunta);
+        Pregunta guardada = preguntaRepository.save(pregunta);
+        return PreguntaDTO.Detalle.from(guardada);
     }
 
     @Transactional
-    public Pregunta actualizarPregunta(Long id, PreguntaDTO.Guardar peticion) {
+    public PreguntaDTO.Detalle actualizarPregunta(Long id, PreguntaDTO.Guardar peticion) {
         Pregunta preguntaExistente = preguntaRepository.findByIdAndFechaBajaIsNull(id)
                 .orElseThrow(() -> new RuntimeException("Pregunta no encontrada con ID: " + id));
 
@@ -100,7 +95,8 @@ public class PreguntaService {
             }
         }
 
-        return preguntaRepository.save(preguntaExistente);
+        Pregunta actualizada = preguntaRepository.save(preguntaExistente);
+        return PreguntaDTO.Detalle.from(actualizada);
     }
 
     @Transactional

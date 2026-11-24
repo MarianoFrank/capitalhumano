@@ -2,12 +2,11 @@ package ar.edu.utn.frsf.capitalhumano.repository;
 
 import ar.edu.utn.frsf.capitalhumano.model.Competencia;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
-public interface CompetenciaRepository extends JpaRepository<Competencia, Long>, JpaSpecificationExecutor<Competencia> {
+public interface CompetenciaRepository extends JpaRepository<Competencia, Long> {
 
     List<Competencia> findByFechaBajaIsNullOrderByNombreAsc();
 

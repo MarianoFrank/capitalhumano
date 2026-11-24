@@ -2,12 +2,16 @@ package ar.edu.utn.frsf.capitalhumano.security;
 
 import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
 import ar.edu.utn.frsf.capitalhumano.dto.ComunDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.CandidatoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Candidato;
+import ar.edu.utn.frsf.capitalhumano.model.Consultor;
 import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
+import ar.edu.utn.frsf.capitalhumano.model.enums.Rol;
+import ar.edu.utn.frsf.capitalhumano.repository.ConsultorRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
 import ar.edu.utn.frsf.capitalhumano.service.CandidatoService;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -20,30 +24,54 @@ import java.util.Map;
 public class SecurityService {
 
     private final CuestionarioRepository cuestionarioRepository;
+    private final ConsultorRepository consultorRepository;
     private final CandidatoService candidatoService;
     private final LdapService ldapService;
     private final JwtService jwtService;
-    private final CandidatoMapper candidatoMapper;
+    private final AuthenticationManager authenticationManager;
 
     public SecurityService(CuestionarioRepository cuestionarioRepository,
+                           ConsultorRepository consultorRepository,
                            CandidatoService candidatoService,
                            LdapService ldapService,
                            JwtService jwtService,
-                           CandidatoMapper candidatoMapper) {
+                           AuthenticationManager authenticationManager) {
         this.cuestionarioRepository = cuestionarioRepository;
+        this.consultorRepository = consultorRepository;
         this.candidatoService = candidatoService;
         this.ldapService = ldapService;
         this.jwtService = jwtService;
-        this.candidatoMapper = candidatoMapper;
+        this.authenticationManager = authenticationManager;
+    }
+
+    // Autentica un consultor contra LDAP y devuelve token + datos del consultor
+    @Transactional
+    public Map<String, Object> autenticarConsultor(String usuario, String contrasenia) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(usuario, contrasenia));
+
+        Consultor consultor = consultorRepository.findByUsername(usuario).orElseGet(() -> {
+            Consultor nuevo = new Consultor();
+            nuevo.setUsername(usuario);
+            return consultorRepository.save(nuevo);
+        });
+
+        String accessToken = jwtService.generarToken(consultor.getUsername(), Rol.CONSULTANT.name());
+
+        return Map.of(
+                "token", accessToken,
+                "cookie", jwtService.generarJwtCookie(accessToken).toString(),
+                "username", consultor.getUsername()
+        );
     }
 
     // nombrePrincipal para el candidato es su documento, para el consultor es su username de LDAP
     public Object obtenerPerfilUsuario(String nombrePrincipal, String rol) {
         String rolLimpio = rol.replace("ROLE_", "");
 
-        if (rolLimpio.equals("CANDIDATE") || rolLimpio.equals("CANDIDATO")) {
+        if (rolLimpio.equals(Rol.CANDIDATE.name()) || rolLimpio.equals("CANDIDATO")) {
             Candidato candidato = candidatoService.buscarPorNumeroDocumento(nombrePrincipal);
-            return candidatoMapper.aPerfil(candidato, nombrePrincipal, rolLimpio);
+            return CandidatoDTO.Perfil.from(candidato, nombrePrincipal, rolLimpio);
         } else {
             Map<String, Object> ldapData = ldapService.obtenerPerfilUsuario(nombrePrincipal);
             if (ldapData == null) {
@@ -98,15 +126,16 @@ public class SecurityService {
 
         if (cuestionario.getEvaluacion().getFechaCierre() != null &&
                 LocalDateTime.now().isAfter(cuestionario.getEvaluacion().getFechaCierre())) {
-            throw new RuntimeException("La evaluación general para este puesto ya se encuentra cerrada.");
+            throw new RuntimeException("El período de evaluación ha concluido.");
         }
 
-        // Generamos un JWT para el candidato
-        String candidateUsername = cuestionario.getCandidato().getNumeroDocumento();
-        String token = jwtService.generarToken(candidateUsername, "CANDIDATE");
+        // El candidato se identifica en el sistema mediante su número de documento
+        String token = jwtService.generarToken(cuestionario.getCandidato().getNumeroDocumento(), Rol.CANDIDATE.name());
 
         return Map.of(
                 "token", token,
-                "idCuestionario", cuestionario.getId());
+                "idCuestionario", cuestionario.getId(),
+                "nombre", cuestionario.getCandidato().getNombre(),
+                "apellido", cuestionario.getCandidato().getApellido());
     }
 }

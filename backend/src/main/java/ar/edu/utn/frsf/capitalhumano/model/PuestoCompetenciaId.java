@@ -17,9 +17,9 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class PuestoCompetenciaId implements Serializable {
 
-    @Column(name = "position_id")
+    @Column(name = "puesto_id")
     private Long puestoId;
 
-    @Column(name = "competency_id")
+    @Column(name = "competencia_id")
     private Long competenciaId;
 }

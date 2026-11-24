@@ -1,19 +1,16 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.CandidatoDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.CandidatoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Candidato;
 import ar.edu.utn.frsf.capitalhumano.model.enums.Genero;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoDocumento;
 import ar.edu.utn.frsf.capitalhumano.repository.CandidatoRepository;
-import ar.edu.utn.frsf.capitalhumano.specification.CandidatoSpecification;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,19 +26,18 @@ import java.util.Optional;
 public class CandidatoService {
 
     private final CandidatoRepository candidatoRepository;
-    private final CandidatoMapper candidatoMapper;
 
-    public CandidatoService(CandidatoRepository candidatoRepository, CandidatoMapper candidatoMapper) {
+    public CandidatoService(CandidatoRepository candidatoRepository) {
         this.candidatoRepository = candidatoRepository;
-        this.candidatoMapper = candidatoMapper;
     }
 
     public Page<CandidatoDTO.Resumen> obtenerCandidatosPaginados(
             String nombre, String apellido, Long numeroCandidato, Pageable pageable) {
 
-        Specification<Candidato> spec = CandidatoSpecification.conFiltros(nombre, apellido, numeroCandidato);
-        Page<Candidato> candidatosPage = candidatoRepository.findAll(spec, pageable);
-        return candidatoMapper.aPaginaResumen(candidatosPage);
+        String nombreFiltro = (nombre != null && !nombre.isBlank()) ? nombre.trim() : null;
+        String apellidoFiltro = (apellido != null && !apellido.isBlank()) ? apellido.trim() : null;
+        Page<Candidato> candidatosPage = candidatoRepository.buscarConFiltros(nombreFiltro, apellidoFiltro, numeroCandidato, pageable);
+        return candidatosPage.map(CandidatoDTO.Resumen::from);
     }
 
     @Transactional
@@ -76,7 +72,7 @@ public class CandidatoService {
                     if (csvDto.nacionalidad() != null) existing.setNacionalidad(csvDto.nacionalidad());
 
                     candidatoRepository.save(existing);
-                    candidatosProcesados.add(candidatoMapper.aResumen(existing));
+                    candidatosProcesados.add(CandidatoDTO.Resumen.from(existing));
                 } else {
                     Candidato newCandidate = new Candidato();
                     if (csvDto.numeroCandidato() != null && !csvDto.numeroCandidato().isBlank()) {
@@ -97,7 +93,7 @@ public class CandidatoService {
                     newCandidate.setNacionalidad(csvDto.nacionalidad());
 
                     Candidato saved = candidatoRepository.save(newCandidate);
-                    candidatosProcesados.add(candidatoMapper.aResumen(saved));
+                    candidatosProcesados.add(CandidatoDTO.Resumen.from(saved));
                 }
             }
         } catch (Exception e) {

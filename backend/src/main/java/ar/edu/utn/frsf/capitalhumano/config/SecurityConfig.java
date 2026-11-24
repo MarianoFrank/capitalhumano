@@ -1,5 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.config;
 
+import ar.edu.utn.frsf.capitalhumano.model.enums.Rol;
 import ar.edu.utn.frsf.capitalhumano.security.JwtCookieFilter;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -58,11 +59,11 @@ public class SecurityConfig {
                                 "/api/factores/**",
                                 "/api/puestos/**",
                                 "/api/reportes/**")
-                        .hasAnyRole("CONSULTANT")
+                        .hasAnyRole(Rol.CONSULTANT.name())
 
                         .requestMatchers(
                                 "/api/cuestionarios/**")
-                        .hasAnyRole("CANDIDATE")
+                        .hasAnyRole(Rol.CANDIDATE.name())
 
                         .anyRequest().authenticated());
 

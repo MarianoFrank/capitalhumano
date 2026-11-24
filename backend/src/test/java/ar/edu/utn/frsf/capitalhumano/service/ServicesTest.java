@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.*;
-import ar.edu.utn.frsf.capitalhumano.mapper.*;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.TipoPregunta;
 import ar.edu.utn.frsf.capitalhumano.repository.*;
@@ -9,14 +8,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 import java.util.Optional;
@@ -47,16 +44,6 @@ class ServicesTest {
     @Mock
     private PuntajeAsyncService puntajeAsyncService;
 
-    private CandidatoMapper candidatoMapper;
-    private PreguntaMapper preguntaMapper;
-    private OpcionMapper opcionMapper;
-    private EmpresaMapper empresaMapper;
-    private CompetenciaMapper competenciaMapper;
-    private FactorMapper factorMapper;
-    private PuestoMapper puestoMapper;
-    private CuestionarioMapper cuestionarioMapper;
-    private EvaluacionMapper evaluacionMapper;
-
     private CandidatoService candidatoService;
     private PreguntaService preguntaService;
     private PuestoService puestoService;
@@ -67,27 +54,17 @@ class ServicesTest {
 
     @BeforeEach
     void setUp() {
-        candidatoMapper = Mappers.getMapper(CandidatoMapper.class);
-        opcionMapper = Mappers.getMapper(OpcionMapper.class);
-        preguntaMapper = Mappers.getMapper(PreguntaMapper.class);
-        empresaMapper = Mappers.getMapper(EmpresaMapper.class);
-        competenciaMapper = Mappers.getMapper(CompetenciaMapper.class);
-        factorMapper = Mappers.getMapper(FactorMapper.class);
-        puestoMapper = Mappers.getMapper(PuestoMapper.class);
-        cuestionarioMapper = Mappers.getMapper(CuestionarioMapper.class);
-        evaluacionMapper = Mappers.getMapper(EvaluacionMapper.class);
-
-        candidatoService = new CandidatoService(candidatoRepository, candidatoMapper);
-        preguntaService = new PreguntaService(preguntaRepository, factorRepository, preguntaMapper);
-        puestoService = new PuestoService(puestoRepository, competenciaRepository, puestoMapper);
-        empresaService = new EmpresaService(empresaRepository, empresaMapper);
-        competenciaService = new CompetenciaService(competenciaRepository, competenciaMapper);
-        factorService = new FactorService(factorRepository, factorMapper);
-        reporteService = new ReporteService(cuestionarioRepository, puestoRepository, evaluacionRepository, puntajeAsyncService, puestoMapper, cuestionarioMapper, evaluacionMapper);
+        candidatoService = new CandidatoService(candidatoRepository);
+        preguntaService = new PreguntaService(preguntaRepository, factorRepository);
+        puestoService = new PuestoService(puestoRepository, competenciaRepository);
+        empresaService = new EmpresaService(empresaRepository);
+        competenciaService = new CompetenciaService(competenciaRepository);
+        factorService = new FactorService(factorRepository);
+        reporteService = new ReporteService(cuestionarioRepository, puestoRepository, evaluacionRepository, puntajeAsyncService);
     }
 
     @Test
-    @DisplayName("CandidatoService - obtenerCandidatosPaginados con Specification")
+    @DisplayName("CandidatoService - obtenerCandidatosPaginados con buscarConFiltros")
     void testCandidatoServicePaginado() {
         Candidato c = new Candidato();
         c.setId(1L);
@@ -96,7 +73,7 @@ class ServicesTest {
         c.setNumeroCandidato(100L);
 
         Page<Candidato> entityPage = new PageImpl<>(List.of(c));
-        when(candidatoRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(entityPage);
+        when(candidatoRepository.buscarConFiltros(eq("Pedro"), isNull(), isNull(), any(Pageable.class))).thenReturn(entityPage);
 
         Page<CandidatoDTO.Resumen> result = candidatoService.obtenerCandidatosPaginados("Pedro", null, null, PageRequest.of(0, 10));
 
@@ -104,11 +81,11 @@ class ServicesTest {
         assertEquals(1, result.getContent().size());
         assertEquals("Pedro", result.getContent().get(0).nombre());
         assertEquals("Picapiedra", result.getContent().get(0).apellido());
-        verify(candidatoRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(candidatoRepository).buscarConFiltros(eq("Pedro"), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
-    @DisplayName("PreguntaService - obtenerTodasLasPreguntasResumen con Specification")
+    @DisplayName("PreguntaService - obtenerTodasLasPreguntasResumen con buscarConFiltros")
     void testPreguntaServicePaginado() {
         Competencia comp = new Competencia();
         comp.setNombre("Comunicación");
@@ -123,7 +100,7 @@ class ServicesTest {
         q.setFactor(fact);
 
         Page<Pregunta> entityPage = new PageImpl<>(List.of(q));
-        when(preguntaRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(entityPage);
+        when(preguntaRepository.buscarConFiltros(eq(1L), eq(2L), eq("Pregunta"), any(Pageable.class))).thenReturn(entityPage);
 
         Page<PreguntaDTO.Resumen> result = preguntaService.obtenerTodasLasPreguntasResumen(1L, 2L, "Pregunta", PageRequest.of(0, 10));
 
@@ -147,16 +124,17 @@ class ServicesTest {
                 List.of(new PreguntaDTO.OpcionGuardar(1, 10, "Opción 1"))
         );
 
-        Pregunta creada = preguntaService.crearPregunta(req);
+        PreguntaDTO.Detalle creada = preguntaService.crearPregunta(req);
+
         assertNotNull(creada);
-        assertEquals("Nombre", creada.getNombre());
-        assertEquals("Texto", creada.getTexto());
-        assertEquals(TipoPregunta.SINGLE_CHOICE, creada.getTipo());
-        assertEquals(1, creada.getOpciones().size());
-        assertEquals(1, creada.getOpciones().get(0).getOrdenVisualizacion());
-        assertEquals(10, creada.getOpciones().get(0).getPonderacion());
-        assertEquals("Opción 1", creada.getOpciones().get(0).getTexto());
-        assertEquals(factor, creada.getFactor());
+        assertEquals("Nombre", creada.nombre());
+        assertEquals("Texto", creada.texto());
+        assertEquals(TipoPregunta.SINGLE_CHOICE, creada.tipo());
+        assertEquals(1, creada.opciones().size());
+        assertEquals(1, creada.opciones().get(0).ordenVisualizacion());
+        assertEquals(10, creada.opciones().get(0).ponderacion());
+        assertEquals("Opción 1", creada.opciones().get(0).texto());
+        assertEquals(5L, creada.idFactor());
     }
 
     @Test
@@ -202,7 +180,7 @@ class ServicesTest {
     }
 
     @Test
-    @DisplayName("ReporteService - obtenerPuestosParaReporte con Specification")
+    @DisplayName("ReporteService - obtenerPuestosParaReporte con buscarParaReporte")
     void testReporteServicePuestos() {
         Empresa emp = new Empresa();
         emp.setNombre("Mi Empresa");
@@ -214,7 +192,7 @@ class ServicesTest {
         p.setEmpresa(emp);
 
         Page<Puesto> puestosPage = new PageImpl<>(List.of(p));
-        when(puestoRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(puestosPage);
+        when(puestoRepository.buscarParaReporte(eq(1L), eq("Puesto"), eq("COD"), any(Pageable.class))).thenReturn(puestosPage);
         when(cuestionarioRepository.findByEvaluacionPuestoId(1L)).thenReturn(List.of());
 
         Page<PuestoDTO.Resumen> res = reporteService.obtenerPuestosParaReporte(1L, "Puesto", "COD", PageRequest.of(0, 10));

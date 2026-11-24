@@ -2,19 +2,14 @@ package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.EvaluacionDTO;
 import ar.edu.utn.frsf.capitalhumano.dto.PuestoDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.CuestionarioMapper;
-import ar.edu.utn.frsf.capitalhumano.mapper.EvaluacionMapper;
-import ar.edu.utn.frsf.capitalhumano.mapper.PuestoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.*;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.EvaluacionRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.PuestoRepository;
-import ar.edu.utn.frsf.capitalhumano.specification.PuestoSpecification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,24 +28,15 @@ public class ReporteService {
     private final PuestoRepository puestoRepository;
     private final EvaluacionRepository evaluacionRepository;
     private final PuntajeAsyncService puntajeAsyncService;
-    private final PuestoMapper puestoMapper;
-    private final CuestionarioMapper cuestionarioMapper;
-    private final EvaluacionMapper evaluacionMapper;
 
     public ReporteService(CuestionarioRepository cuestionarioRepository,
             PuestoRepository puestoRepository,
             EvaluacionRepository evaluacionRepository,
-            PuntajeAsyncService puntajeAsyncService,
-            PuestoMapper puestoMapper,
-            CuestionarioMapper cuestionarioMapper,
-            EvaluacionMapper evaluacionMapper) {
+            PuntajeAsyncService puntajeAsyncService) {
         this.cuestionarioRepository = cuestionarioRepository;
         this.puestoRepository = puestoRepository;
         this.evaluacionRepository = evaluacionRepository;
         this.puntajeAsyncService = puntajeAsyncService;
-        this.puestoMapper = puestoMapper;
-        this.cuestionarioMapper = cuestionarioMapper;
-        this.evaluacionMapper = evaluacionMapper;
     }
 
     @Transactional(readOnly = true)
@@ -76,7 +62,7 @@ public class ReporteService {
                 q = cuestionarioRepository.findById(q.getId()).orElse(q);
             }
 
-            EvaluacionDTO.ReporteCandidato dto = cuestionarioMapper.aReporteCandidato(q);
+            EvaluacionDTO.ReporteCandidato dto = EvaluacionDTO.ReporteCandidato.from(q);
 
             if (esCandidatoAprobado(q, puesto)) {
                 aprobados.add(dto);
@@ -93,7 +79,7 @@ public class ReporteService {
         org.springframework.security.core.Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String nombreConsultor = (auth != null && auth.getName() != null) ? auth.getName() : "Sistema";
 
-        return cuestionarioMapper.aReporteOrdenMerito(
+        return EvaluacionDTO.ReporteOrdenMerito.from(
                 puesto,
                 nombreConsultor,
                 LocalDateTime.now(),
@@ -150,8 +136,9 @@ public class ReporteService {
     public Page<PuestoDTO.Resumen> obtenerPuestosParaReporte(
             Long idEmpresa, String nombrePuesto, String codigo, Pageable pageable) {
 
-        Specification<Puesto> spec = PuestoSpecification.conFiltrosReporte(idEmpresa, nombrePuesto, codigo);
-        Page<Puesto> puestosPage = puestoRepository.findAll(spec, pageable);
+        String nombreFiltro = (nombrePuesto != null && !nombrePuesto.isBlank()) ? nombrePuesto.trim() : null;
+        String codigoFiltro = (codigo != null && !codigo.isBlank()) ? codigo.trim() : null;
+        Page<Puesto> puestosPage = puestoRepository.buscarParaReporte(idEmpresa, nombreFiltro, codigoFiltro, pageable);
 
         List<PuestoDTO.Resumen> listaDto = new ArrayList<>();
         for (Puesto puesto : puestosPage.getContent()) {
@@ -161,7 +148,7 @@ public class ReporteService {
                     .filter(c -> c.getEstado() == EstadoCuestionario.COMPLETED)
                     .count();
 
-            listaDto.add(puestoMapper.aResumen(puesto, totalCandidatos, completadas));
+            listaDto.add(PuestoDTO.Resumen.from(puesto, totalCandidatos, completadas));
         }
 
         return new PageImpl<>(listaDto, pageable, puestosPage.getTotalElements());
@@ -182,7 +169,7 @@ public class ReporteService {
             String fechaStr = ev.getFechaCreacion() != null ? ev.getFechaCreacion().format(formatter) : "Sin fecha";
             String descripcion = String.format("%s - Candidatos: %d - Completadas: %d", fechaStr, total, completadas);
 
-            lista.add(evaluacionMapper.aResumen(ev.getId(), descripcion));
+            lista.add(EvaluacionDTO.Resumen.from(ev.getId(), descripcion));
         }
         return lista;
     }

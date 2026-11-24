@@ -1,5 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.dto;
 
+import ar.edu.utn.frsf.capitalhumano.model.Candidato;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public final class CandidatoDTO {
@@ -36,7 +37,12 @@ public final class CandidatoDTO {
             String nombre,
             String apellido,
             Long numeroCandidato
-    ) {}
+    ) {
+        public static Resumen from(Candidato c) {
+            if (c == null) return null;
+            return new Resumen(c.getId(), c.getNombre(), c.getApellido(), c.getNumeroCandidato());
+        }
+    }
 
     // Respuesta: Perfil de usuario autenticado
     public record Perfil(
@@ -44,5 +50,10 @@ public final class CandidatoDTO {
             String rol,
             String nombre,
             String apellido
-    ) {}
+    ) {
+        public static Perfil from(Candidato c, String nombrePrincipal, String rol) {
+            if (c == null) return null;
+            return new Perfil(nombrePrincipal, rol, c.getNombre(), c.getApellido());
+        }
+    }
 }

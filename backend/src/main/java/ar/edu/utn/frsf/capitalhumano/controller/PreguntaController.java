@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.controller;
 
 import ar.edu.utn.frsf.capitalhumano.dto.PreguntaDTO;
-import ar.edu.utn.frsf.capitalhumano.service.IaGeneracionService;
 import ar.edu.utn.frsf.capitalhumano.service.PreguntaService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -17,11 +16,9 @@ import org.springframework.web.bind.annotation.*;
 public class PreguntaController {
 
     private final PreguntaService preguntaService;
-    private final IaGeneracionService iaGeneracionService;
 
-    public PreguntaController(PreguntaService preguntaService, IaGeneracionService iaGeneracionService) {
+    public PreguntaController(PreguntaService preguntaService) {
         this.preguntaService = preguntaService;
-        this.iaGeneracionService = iaGeneracionService;
     }
 
     @GetMapping
@@ -44,8 +41,7 @@ public class PreguntaController {
 
     @PostMapping
     public ResponseEntity<PreguntaDTO.Detalle> crear(@Valid @RequestBody PreguntaDTO.Guardar peticion) {
-        var creada = preguntaService.crearPregunta(peticion);
-        PreguntaDTO.Detalle detalle = preguntaService.obtenerPreguntaPorId(creada.getId());
+        PreguntaDTO.Detalle detalle = preguntaService.crearPregunta(peticion);
         return ResponseEntity.status(HttpStatus.CREATED).body(detalle);
     }
 
@@ -53,8 +49,7 @@ public class PreguntaController {
     public ResponseEntity<PreguntaDTO.Detalle> actualizar(
             @PathVariable Long id,
             @Valid @RequestBody PreguntaDTO.Guardar peticion) {
-        var actualizada = preguntaService.actualizarPregunta(id, peticion);
-        PreguntaDTO.Detalle detalle = preguntaService.obtenerPreguntaPorId(actualizada.getId());
+        PreguntaDTO.Detalle detalle = preguntaService.actualizarPregunta(id, peticion);
         return ResponseEntity.ok(detalle);
     }
 
@@ -62,11 +57,5 @@ public class PreguntaController {
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         preguntaService.eliminarPregunta(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/generar-ia")
-    public ResponseEntity<PreguntaDTO.IaRespuesta> generarPreguntaIa(@Valid @RequestBody PreguntaDTO.IaPeticion peticion) {
-        PreguntaDTO.IaRespuesta respuesta = iaGeneracionService.generarPregunta(peticion);
-        return ResponseEntity.ok(respuesta);
     }
 }

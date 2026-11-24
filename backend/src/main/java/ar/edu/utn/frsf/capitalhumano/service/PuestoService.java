@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.PuestoDTO;
-import ar.edu.utn.frsf.capitalhumano.mapper.PuestoMapper;
 import ar.edu.utn.frsf.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.capitalhumano.repository.CompetenciaRepository;
 import ar.edu.utn.frsf.capitalhumano.repository.PuestoRepository;
@@ -17,14 +16,11 @@ public class PuestoService {
 
     private final PuestoRepository puestoRepository;
     private final CompetenciaRepository competenciaRepository;
-    private final PuestoMapper puestoMapper;
 
     public PuestoService(PuestoRepository puestoRepository,
-                         CompetenciaRepository competenciaRepository,
-                         PuestoMapper puestoMapper) {
+                         CompetenciaRepository competenciaRepository) {
         this.puestoRepository = puestoRepository;
         this.competenciaRepository = competenciaRepository;
-        this.puestoMapper = puestoMapper;
     }
 
     @Transactional(readOnly = true)
@@ -32,6 +28,6 @@ public class PuestoService {
         List<Puesto> puestos = puestoRepository.findAllActivePositions();
         Set<Long> competenciasValidasIds = new HashSet<>(competenciaRepository.findValidCompetencyIds());
 
-        return puestoMapper.aSelecciones(puestos, competenciasValidasIds);
+        return PuestoDTO.Seleccion.fromList(puestos, competenciasValidasIds);
     }
 }
