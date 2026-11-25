@@ -1,7 +1,6 @@
 package ar.edu.utn.frsf.capitalhumano.service;
 
 import ar.edu.utn.frsf.capitalhumano.dto.ComunDTO;
-import ar.edu.utn.frsf.capitalhumano.model.Empresa;
 import ar.edu.utn.frsf.capitalhumano.repository.EmpresaRepository;
 import org.springframework.stereotype.Service;
 
