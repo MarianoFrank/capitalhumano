@@ -8,7 +8,7 @@ Sistema integral de gestión de recursos humanos y evaluación de competencias d
 
 ```text
 capitalhumano/
-├── backend/            # API REST con Spring Boot 3 & Java 21
+├── backend/            # API REST con Spring Boot 4.1.0 & Java 21
 │   ├── src/            # Controladores, Servicios, Seguridad, JPA
 │   └── pom.xml         # Dependencias de Maven
 ├── frontend/           # SPA con React 19 & Vite

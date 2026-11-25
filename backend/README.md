@@ -27,7 +27,6 @@ backend/
 ├── pom.xml                          # Dependencias y configuración de Maven
 ├── mvnw / mvnw.cmd                  # Maven Wrapper para ejecutar el proyecto
 ├── .env.example                     # Variables de entorno de referencia
-├── uml/                             # Diagramas UML del diseño del sistema
 │
 └── src/
     ├── main/
@@ -119,10 +118,6 @@ Contiene los archivos de configuración de ejecución. `application.properties` 
 ### `src/test/`
 
 Contiene las pruebas del proyecto. Las pruebas verifican DTOs, servicios, consultas de repositorios, manejo global de excepciones y el contexto general de Spring Boot. Los recursos de prueba separan la configuración utilizada por los tests de la configuración principal.
-
-### `uml/`
-
-Incluye el modelo UML utilizado para documentar casos de uso y relaciones del sistema.
 
 ### `pom.xml`
 
