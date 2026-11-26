@@ -26,13 +26,24 @@ capitalhumano/
 
 - Docker y Docker Compose
 - Java 21 (JDK)
-- Node.js 18+ y npm
+- Node.js 20.19+ o 22.12+ y npm
 
 ---
 
 ## Puesta en Marcha
 
-### 1. Iniciar Base de Datos y OpenLDAP
+### 1. Configurar variables de entorno
+
+Desde la raíz del repositorio:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+En `backend/.env`, reemplazá `tu_api_key_aqui` por tu API Key de Google Gemini.
+
+### 2. Iniciar Base de Datos y OpenLDAP
 
 Desde la raíz del repositorio:
 
@@ -47,7 +58,7 @@ Servicios disponibles:
 
 ---
 
-### 2. Iniciar el Backend
+### 3. Iniciar el Backend
 
 ```bash
 cd backend
@@ -58,7 +69,7 @@ La API estará disponible en `http://localhost:8080`.
 
 ---
 
-### 3. Iniciar el Frontend
+### 4. Iniciar el Frontend
 
 ```bash
 cd frontend
