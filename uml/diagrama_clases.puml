@@ -62,12 +62,6 @@ skinparam class{
 ' ==========================================
 package "Enumeraciones" {
     enum EstadoCuestionario {
-        ACTIVO
-        EN_PROCESO
-        COMPLETADO
-        INCOMPLETO
-        SIN_CONTESTAR
-        -- En Backend Java --
         ACTIVE
         IN_PROGRESS
         COMPLETED
@@ -81,22 +75,20 @@ package "Enumeraciones" {
         PP
     }
     enum TipoPregunta {
-        OPCION_SIMPLE
-        OPCION_MULTIPLE
-        -- En Backend Java --
         SINGLE_CHOICE
         MULTIPLE_CHOICE
     }
     enum TipoCompetencia {
-        TECNICA
-        ACTITUDINAL
-        -- En Backend Java --
         TECNICA
         CONDUCTUAL
     }
     enum Genero {
         H
         M
+    }
+    enum Rol {
+        CONSULTANT
+        CANDIDATE
     }
 }
 
@@ -140,6 +132,7 @@ package "Capa de Presentación" {
         + cancelar(): void
         + finalizar(): void
         + exportarExcel(): void
+        - generarLibroExcel(claves: List<EvaluacionDTO.ClaveGenerada>): void
     }
 
     class CuestionarioView <<View>> {
@@ -231,18 +224,27 @@ package "Capa de Presentación" {
 package "Servicios del Sistema" {
 
     class SecurityService <<Servicio>> {
-        + autenticarConsultor(usuario: String, pass: String): Boolean
         + autenticarConsultor(usuario: String, contrasenia: String): Map<String, Object>
-        + autenticarCandidato(claveAcceso: String): Long
         + autenticarCandidato(peticion: CandidatoDTO.IniciarSesion): Map<String, Object>
         + obtenerPerfilUsuario(nombrePrincipal: String, rol: String): Object
-        + esCandidatoDuenio(idCuestionario: Long, usuario: String): Boolean
         + esPropietarioCuestionario(idCuestionario: Long): Boolean
     }
 
+    class JwtService <<Servicio>> {
+        + generarToken(nombreUsuario: String, rol: String): String
+        + generarJwtCookie(jwt: String): ResponseCookie
+        + obtenerCleanJwtCookie(): ResponseCookie
+        + extraerNombreUsuario(token: String): String
+        + extraerRol(token: String): String
+        + esTokenValido(token: String): boolean
+    }
+
+    class LdapService <<Servicio>> {
+        + esUsuarioActivo(nombreUsuario: String): boolean
+        + obtenerPerfilUsuario(nombreUsuario: String): Map<String, Object>
+    }
+
     class CandidatoService <<Servicio>> {
-        + importarCandidatos(archivoCSV: File): List<Candidato>
-        + listarCandidatos(nombre: String, apellido: String, nro: Long, pageable: Pageable): Page<CandidatoResumenDTO>
         + obtenerCandidatosPaginados(nombre: String, apellido: String, numeroCandidato: Long, pageable: Pageable): Page<CandidatoDTO.Resumen>
         + procesarCandidatosCsv(file: MultipartFile): List<CandidatoDTO.Resumen>
         + buscarPorNumeroDocumento(nroDocumento: String): Candidato
@@ -297,15 +299,10 @@ package "Servicios del Sistema" {
     end note
 
     class PreguntaService <<Servicio>> {
-        + listarPreguntas(idCompetencia: Long, idFactor: Long, nombre: String, pageable: Pageable): Page<PreguntaResumenDTO>
         + obtenerTodasLasPreguntasResumen(idCompetencia: Long, idFactor: Long, nombrePregunta: String, pageable: Pageable): Page<PreguntaDTO.Resumen>
-        + buscarPregunta(id: Long): PreguntaDetalleDTO
         + obtenerPreguntaPorId(id: Long): PreguntaDTO.Detalle
-        + darDeAltaPregunta(datos: AltaPreguntaDTO): PreguntaDetalleDTO
         + crearPregunta(peticion: PreguntaDTO.Guardar): PreguntaDTO.Detalle
-        + modificarPregunta(idPregunta: Long, datos: AltaPreguntaDTO): PreguntaDetalleDTO
         + actualizarPregunta(id: Long, peticion: PreguntaDTO.Guardar): PreguntaDTO.Detalle
-        + darDeBajaPregunta(idPregunta: Long): void
         + eliminarPregunta(id: Long): void
         - validarPreguntaNoDuplicada(idFactor: Long, nombre: String, texto: String, idExcluir: Long): void
         - validarPonderacionesOpciones(opciones: List<PreguntaDTO.OpcionGuardar>): void
@@ -318,15 +315,12 @@ package "Servicios del Sistema" {
     end note
 
     class EvaluacionService <<Servicio>> {
-        + listarEvaluaciones(idPuesto: Long, pageable: Pageable): Page<ResumenEvaluacionDTO>
         + validarCandidatosDisponibles(idsCandidatos: List<Long>): void
         - validarCompetenciasEvaluables(puesto: Puesto): void
-        + crearEvaluacion(idPuesto: Long, idsCandidatos: List<Long>): List<ClaveEvaluacionCandidatoDTO>
         + generarEvaluacion(peticion: EvaluacionDTO.Generar): List<EvaluacionDTO.ClaveGenerada>
         + generarEstructuraCuestionario(cuestionario: Cuestionario, puesto: Puesto): void
         - seleccionarPreguntasParaPuesto(puesto: Puesto): List<Pregunta>
         - armarBloquesCuestionario(cuestionario: Cuestionario, preguntasSeleccionadas: List<Pregunta>, porBloque: int): void
-        - generarClaveAcceso(): String
         - generarClaveAccesoUnica(): String
     }
 
@@ -337,15 +331,20 @@ package "Servicios del Sistema" {
         + guardarRespuestasBloque(idCuestionario: Long, numeroBloque: int, respuestas: Map<Long, List<Long>>): void
         + finalizarPorTiempoAgotado(idCuestionario: Long): void
         - validarDisponibilidadYCerrarSiVencio(cuestionario: Cuestionario, ahora: LocalDateTime, validarMaxAccesos: boolean): void
-        + <<Async>> calcularPuntajes(idCuestionario: Long): Double
-        + <<Scheduled>> finalizarCuestionariosVencidos(): void
+        + finalizarCuestionariosVencidos(): void
     }
     note right of CuestionarioService
       <b>Decisiones de Implementación (Spring Boot):</b>
-      • <b>iniciarCuestionario:</b> Crea la entidad si aún no existe.
-      • <b>calcularPuntajes:</b> Asincrónico para no bloquear el hilo.
-      • <b>finalizarCuestionariosVencidos:</b> Tarea programada (Cron job).
+      • <b>iniciarCuestionario:</b> Si el cuestionario no tiene bloques, genera su estructura.
+      • <b>guardarRespuestasBloque:</b> Al completar el último bloque publica
+        CuestionarioCompletadoEvent; PuntajeAsyncService calcula los puntajes
+        en forma asincrónica (AFTER_COMMIT + @Async).
+      • <b>finalizarCuestionariosVencidos:</b> Lo invoca CuestionarioVencimientoScheduler (cron 00:00).
     end note
+
+    class CuestionarioVencimientoScheduler <<Servicio>> {
+        + <<Scheduled>> procesarCuestionariosVencidos(): void
+    }
 
     class PuntajeAsyncService <<Servicio>> {
         + <<Async>> calcularPuntajesAsync(event: CuestionarioCompletadoEvent): void
@@ -355,7 +354,6 @@ package "Servicios del Sistema" {
     class ReporteService <<Servicio>> {
         + generarOrdenMerito(idPuesto: Long, idEvaluacion: Long): EvaluacionDTO.ReporteOrdenMerito
         - esCandidatoAprobado(cuestionario: Cuestionario, puesto: Puesto): boolean
-        - cumpleRequisitos(cuestionario: Cuestionario, ponderaciones: Map<Long, Integer>): Boolean
         + obtenerPuestosParaReporte(idEmpresa: Long, nombrePuesto: String, codigo: String, pageable: Pageable): Page<PuestoDTO.Resumen>
         + obtenerResumenEvaluacionesPorPuesto(idPuesto: Long): List<EvaluacionDTO.Resumen>
         + emitirReporteComparativo(idEvaluacion: Long, idCandidato: Long): ReporteComparativoDTO
@@ -367,7 +365,6 @@ package "Servicios del Sistema" {
     }
 
     class IaGeneracionService <<Servicio>> {
-        + generarPregunta(contexto: ContextoPreguntaIADTO): PreguntaGeneradaIADTO
         + generarPregunta(peticion: PreguntaDTO.IaPeticion): PreguntaDTO.IaRespuesta
     }
 
@@ -381,51 +378,45 @@ package "Servicios del Sistema" {
 ' ==========================================
 package "Acceso a Datos (DAOs)" {
 
-    interface "DAO<T, ID>" as DAO <<DAO>> {
-        + buscarPorId(id: ID): T
-        + buscarTodos(): List<T>
-        + guardar(entidad: T): T
-        + guardarTodos(entidades: List<T>): List<T>
-        + eliminar(entidad: T): void
-        + eliminarPorId(id: ID): void
-        + existePorId(id: ID): Boolean
-        + contar(): Long
+    interface "JpaRepository<T, ID>" as DAO <<DAO>> {
+        + findById(id: ID): Optional<T>
+        + findAll(): List<T>
+        + save(entidad: T): T
+        + saveAll(entidades: List<T>): List<T>
+        + delete(entidad: T): void
+        + deleteById(id: ID): void
+        + existsById(id: ID): boolean
+        + count(): long
     }
+    note top of DAO
+        Las implementaciones de los repositorios las
+        genera Spring Data JPA en tiempo de ejecución.
+    end note
 
     interface CandidatoRepository <<DAO>> {
-        + buscarPorNroCandidato(nro: Long): Candidato
         + findByNumeroCandidato(numeroCandidato: Long): Optional<Candidato>
-        + buscarPorDocumento(doc: String): Candidato
         + findByNumeroDocumento(numeroDocumento: String): Optional<Candidato>
-        + buscarPorNrosCandidato(nros: List<Long>): List<Candidato>
         + findByNumeroCandidatoIn(numerosCandidatos: List<Long>): List<Candidato>
-        + buscarFiltrado(nombre: String, apellido: String, nro: Long, pageable: Pageable): Page<Candidato>
         + buscarConFiltros(nombre: String, apellido: String, numeroCandidato: Long, pageable: Pageable): Page<Candidato>
     }
 
     interface EvaluacionRepository <<DAO>> {
-        + buscarPorPuesto(idPuesto: Long): List<Evaluacion>
         + findByPuestoId(puestoId: Long): List<Evaluacion>
     }
 
     interface CuestionarioRepository <<DAO>> {
-        + buscarPorClaveAcceso(clave: String): Cuestionario
         + findByClaveAcceso(claveAcceso: String): Optional<Cuestionario>
-        ' --- Consultas optimizadas para Orden de Merito ---
-        + buscarConPuntajesPorEvaluacion(idEval: Long): List<Cuestionario>
-        + buscarConPuntajesPorPuesto(idPuesto: Long): List<Cuestionario>
+        ' --- Consultas para Orden de Merito ---
         + findByEvaluacionId(evaluacionId: Long): List<Cuestionario>
         + findByEvaluacionPuestoId(puestoId: Long): List<Cuestionario>
         + findByCandidatoIdInAndEstadoIn(idsCandidatos: List<Long>, estados: List<EstadoCuestionario>): List<Cuestionario>
         + findByEstadoIn(estados: List<EstadoCuestionario>): List<Cuestionario>
         ' --- para Reporte Comparativo ---
         + buscarPorEvaluacionYCandidato(idEval: Long, idCandidato: Long): Cuestionario
-        + buscarVencidos(fecha: DateTime, estados: List<EstadoCuestionario>): List<Cuestionario>
         + findExpiredQuestionnaires(now: LocalDateTime, states: List<EstadoCuestionario>): List<Cuestionario>
     }
 
     interface PreguntaRepository <<DAO>> {
-        + buscarFiltrado(idComp: Long, idFactor: Long, nombre: String, pageable: Pageable): Page<Pregunta>
         + buscarConFiltros(idCompetencia: Long, idFactor: Long, nombre: String, pageable: Pageable): Page<Pregunta>
         + findByIdAndFechaBajaIsNull(id: Long): Optional<Pregunta>
         + existsByFactorIdAndNombreIgnoreCaseAndFechaBajaIsNull(factorId: Long, nombre: String): boolean
@@ -433,8 +424,7 @@ package "Acceso a Datos (DAOs)" {
         + existsByFactorIdAndNombreIgnoreCaseAndFechaBajaIsNullAndIdNot(factorId: Long, nombre: String, id: Long): boolean
         + existsByFactorIdAndTextoIgnoreCaseAndFechaBajaIsNullAndIdNot(factorId: Long, texto: String, id: Long): boolean
 
-        ' --- Para generar exámenes (podría buscar 2 random)---
-        + buscarActivasPorFactor(idFactor: Long): List<Pregunta>
+        ' --- Para generar exámenes ---
         + findActiveByFactorId(factorId: Long): List<Pregunta>
 
         ' para validar si esta siendo usada en un cuestionario si se quiere modificar (versionado)
@@ -450,13 +440,11 @@ package "Acceso a Datos (DAOs)" {
     interface CompetenciaRepository <<DAO>> {
         ' competencias que tienen al menos un factor con 2 o más preguntas activas
         ' para comparar con las competencias al momento de emitir evaluacion para un puesto (no se puede emitir si las comp. no son validas)
-        + buscarIdsCompetenciasValidas(): List<Long>
         + findValidCompetencyIds(): List<Long>
         + findByFechaBajaIsNullOrderByNombreAsc(): List<Competencia>
     }
 
     interface FactorRepository <<DAO>> {
-        + buscarPorCompetencia(idComp: Long): List<Factor>
         + findByFechaBajaIsNullOrderByNombreAsc(): List<Factor>
         + findByCompetenciaIdAndFechaBajaIsNullOrderByNombreAsc(competenciaId: Long): List<Factor>
     }
@@ -466,25 +454,12 @@ package "Acceso a Datos (DAOs)" {
     }
 
     interface ConsultorRepository <<DAO>> {
-        + buscarPorUsuario(usuario: String): Consultor
         + findByUsername(username: String): Optional<Consultor>
     }
 
     interface AuditoriaDAO <<DAO>> {
         + buscarPorEntidad(tipoEntidad: String): List<RegistroAuditoria>
     }
-
-    ' -- Implementaciones --
-    class CandidatoDAOImpl <<DAO>> {}
-    class EvaluacionDAOImpl <<DAO>> {}
-    class CuestionarioDAOImpl <<DAO>> {}
-    class PreguntaDAOImpl <<DAO>> {}
-    class PuestoDAOImpl <<DAO>> {}
-    class CompetenciaDAOImpl <<DAO>> {}
-    class FactorDAOImpl <<DAO>> {}
-    class EmpresaDAOImpl <<DAO>> {}
-    class ConsultorDAOImpl <<DAO>> {}
-    class AuditoriaDAOImpl <<DAO>> {}
 }
 
 ' ==========================================
@@ -492,74 +467,7 @@ package "Acceso a Datos (DAOs)" {
 ' ==========================================
 package "Objetos de Transferencia de Datos (DTOs)" {
 
-    class RespuestasBloqueDTO <<DTO>> {
-        + idCuestionario: Long
-        + nroBloque: Integer
-        + respuestas: List<RespuestaItemDTO>
-    }
-
-    class RespuestaItemDTO <<DTO>> {
-        + idItemPregunta: Long
-        + idsOpcionesSeleccionadas: List<Long>
-    }
-
-    class InicioCuestionarioDTO <<DTO>> {
-        + idCuestionario: Long
-        + totalBloques: Integer
-        + bloqueActual: Integer
-        + duracionMinutos: Integer
-        + estado: String
-        + fechaInicio: DateTime
-    }
-
-    class BloquePreguntasDTO <<DTO>> {
-        + id: Long
-        + itemsPregunta: List<ItemPreguntaDTO>
-    }
-
-    class ItemPreguntaDTO <<DTO>> {
-        + id: Long
-        + ordenVisualizacion: Integer
-        + texto: String
-        + esMultiple: Boolean
-        + itemsOpcion: List<ItemOpcionDTO>
-    }
-
-    class ItemOpcionDTO <<DTO>> {
-        + id: Long
-        + ordenVisualizacion: Integer
-        + texto: String
-        + respondido: Boolean
-    }
-
-    ' --- REPORTES Y MODALES (Esenciales para la visualización compleja) ---
-    class ReporteOrdenMeritoDTO <<DTO>> {
-        + nombreEmpresa: String
-        + nombrePuesto: String
-        + emitidoPor: String
-        + fechaEmision: DateTime
-        + candidatosDentroDeOrden: List<CandidatoResultadoDTO>
-        + candidatosFueraDeOrden: List<CandidatoResultadoDTO>
-        ' candidatos fuera de la orden de merito que no completaron
-        + candidatosActivos: List<CandidatoResultadoDTO>
-        + candidatosEnProceso: List<CandidatoResultadoDTO>
-        + candidatosIncompletos: List<CandidatoResultadoDTO>
-        + candidatosSinContestar: List<CandidatoResultadoDTO>
-    }
-
-    class CandidatoResultadoDTO <<DTO>> {
-        + nombre: String
-        + apellido: String
-        + tipoDocumento: String
-        + nroDocumento: String
-        + nroCandidato: String
-        + estado: String
-        + puntaje: Double
-        + fechaInicio: DateTime
-        + fechaFin: DateTime
-        + cantidadAccesos: Integer
-    }
-
+    ' --- REPORTE COMPARATIVO (CU027) ---
     class ReporteComparativoDTO <<DTO>> {
         + nombreEmpresa: String
         + nombrePuesto: String
@@ -596,43 +504,7 @@ package "Objetos de Transferencia de Datos (DTOs)" {
         + ponderacionRequerida: Integer
     }
 
-    class AltaPreguntaDTO <<DTO>> {
-        + idFactor: Long
-        + nombre: String
-        + texto: String
-        + descripcion: String
-        + tipo: TipoPregunta
-        + opciones: List<OpcionPreguntaDTO>
-    }
-
-    class OpcionPreguntaDTO <<DTO>> {
-        + ordenVisualizacion: Integer
-        + ponderacion: Integer
-        + texto: String
-    }
-
-    class ClaveEvaluacionCandidatoDTO <<DTO>> {
-        + nroCandidato: String
-        + nombre: String
-        + apellido: String
-        + claveAcceso: String
-    }
-
-    ' --- MÓDULO IA ---
-    class PreguntaGeneradaIADTO <<DTO>> {
-        + nombrePregunta: String
-        + descripcion: String
-        + tipo: String
-        + texto: String
-        + opciones: List<OpcionGeneradaIADTO>
-    }
-
-    class OpcionGeneradaIADTO <<DTO>> {
-        + texto: String
-        + ponderacion: Integer
-    }
-
-    ' --- DTOs REALES IMPLEMENTADOS EN BACKEND ---
+    ' --- DTOs IMPLEMENTADOS EN BACKEND ---
     class "ComunDTO.ItemSeleccion" as ComunDTO_ItemSeleccion <<DTO>> {
         + id: Long
         + nombre: String
@@ -671,6 +543,13 @@ package "Objetos de Transferencia de Datos (DTOs)" {
         + opciones: List<PreguntaDTO.OpcionDetalle>
     }
 
+    class "PreguntaDTO.OpcionDetalle" as PreguntaDTO_OpcionDetalle <<DTO>> {
+        + id: Long
+        + ordenVisualizacion: Integer
+        + ponderacion: Integer
+        + texto: String
+    }
+
     class "PreguntaDTO.IaPeticion" as PreguntaDTO_IaPeticion <<DTO>> {
         + nombreCompetencia: String
         + nombreFactor: String
@@ -685,6 +564,19 @@ package "Objetos de Transferencia de Datos (DTOs)" {
         + tipo: TipoPregunta
         + texto: String
         + opciones: List<PreguntaDTO.OpcionGenerada>
+    }
+
+    class "PreguntaDTO.OpcionGenerada" as PreguntaDTO_OpcionGenerada <<DTO>> {
+        + texto: String
+        + ponderacion: Integer
+    }
+
+    class "CandidatoDTO.IniciarSesion" as CandidatoDTO_IniciarSesion <<DTO>> {
+        + claveAcceso: String
+    }
+
+    class "CandidatoDTO.SesionIniciada" as CandidatoDTO_SesionIniciada <<DTO>> {
+        + idCuestionario: Long
     }
 
     class "CandidatoDTO.Resumen" as CandidatoDTO_Resumen <<DTO>> {
@@ -771,6 +663,21 @@ package "Objetos de Transferencia de Datos (DTOs)" {
         + itemsPregunta: List<CuestionarioDTO.ItemPregunta>
     }
 
+    class "CuestionarioDTO.ItemPregunta" as CuestionarioDTO_ItemPregunta <<DTO>> {
+        + id: Long
+        + ordenVisualizacion: int
+        + texto: String
+        + esMultiple: boolean
+        + itemsOpcion: List<CuestionarioDTO.ItemOpcion>
+    }
+
+    class "CuestionarioDTO.ItemOpcion" as CuestionarioDTO_ItemOpcion <<DTO>> {
+        + id: Long
+        + ordenVisualizacion: int
+        + texto: String
+        + estaRespondida: Boolean
+    }
+
     class ApiErrorResponse <<DTO>> {
         + timestamp: LocalDateTime
         + status: Integer
@@ -820,16 +727,16 @@ package "Dominio" {
     end note
 
     class Consultor {
-        - nombreUsuario: String
+        - username: String
     }
 
     class Candidato {
-        - nroCandidato: Long
+        - numeroCandidato: Long
         - tipoDocumento: TipoDocumento
-        - nroDocumento: String
+        - numeroDocumento: String
         - nombre: String
         - apellido: String
-        - fechaNacimiento: Date
+        - fechaNacimiento: LocalDate
         - genero: Genero
         - email: String
         - escolaridad: String
@@ -838,17 +745,17 @@ package "Dominio" {
 
     class Empresa {
         - nombre: String
-        - fechaBaja: Date
+        - fechaBaja: LocalDateTime
     }
 
     class Puesto {
         - codigo: String
         - nombre: String
         - descripcion: String
-        - fechaBaja: Date
+        - fechaBaja: LocalDateTime
     }
 
-    class CompetenciaPuesto {
+    class PuestoCompetencia {
         - ponderacionRequerida: Integer
     }
 
@@ -857,15 +764,15 @@ package "Dominio" {
         - nombre: String
         - descripcion: String
         - tipo: TipoCompetencia
-        - fechaBaja: Date
+        - fechaBaja: LocalDateTime
     }
 
     class Factor {
         - codigo: String
         - nombre: String
         - descripcion: String
-        - nroOrden: Integer
-        - fechaBaja: Date
+        - numeroOrden: Integer
+        - fechaBaja: LocalDateTime
     }
 
     class Pregunta {
@@ -874,11 +781,9 @@ package "Dominio" {
         - texto: String
         - descripcion: String
         - tipo: TipoPregunta
-        - fechaModificacion: DateTime
-        - fechaBaja: Date
+        - fechaModificacion: LocalDateTime
+        - fechaBaja: LocalDateTime
         + Pregunta()
-        + Pregunta(nombre: String, texto: String, descripcion: String, tipo: TipoPregunta, factor: Factor)
-        + agregarOpcion(opcion: Opcion): void
         + getOpciones(): List<Opcion>
         + setFactor(factor: Factor): void
         + setNombre(nombre: String): void
@@ -891,19 +796,15 @@ package "Dominio" {
         - ponderacion: Integer
         - texto: String
         + Opcion()
-        + Opcion(ordenVisualizacion: Integer, texto: String, ponderacion: Integer)
     }
 
     class Evaluacion {
         - codigo: String
-        - fechaCreacion: Date
-        - fechaCierre: Date
-        - duracionEnMinutos: Integer
+        - fechaCreacion: LocalDateTime
+        - fechaCierre: LocalDateTime
         - duracion: Integer
         - cantPreguntasPorBloque: Integer
         + Evaluacion()
-        + Evaluacion(codigo: String, puesto: Puesto, consultor: Consultor, duracionEnMinutos: Integer, cantPreguntasPorBloque: Integer)
-        + agregarCuestionario(cuestionario: Cuestionario): void
         + setCodigo(codigo: String): void
         + setPuesto(puesto: Puesto): void
         + setConsultor(consultor: Consultor): void
@@ -912,20 +813,14 @@ package "Dominio" {
     }
 
     class Cuestionario {
-        - claveIngreso: String
         - claveAcceso: String
-        - fechaHoraInicio: Date
         - fechaInicio: LocalDateTime
-        - fechaHoraFin: Date
         - fechaFin: LocalDateTime
-        - ultimoIngreso: Date
         - ultimoAcceso: LocalDateTime
         - cantidadAccesos: Integer
         - puntajeTotal: Double
         - estado: EstadoCuestionario
         + Cuestionario()
-        + Cuestionario(candidato: Candidato, claveIngreso: String, estado: EstadoCuestionario)
-        + agregarBloque(bloque: Bloque): void
         + getPuntajesCompetencias(): List<PuntajeCompetencia>
         + setEvaluacion(evaluacion: Evaluacion): void
         + setCandidato(candidato: Candidato): void
@@ -939,33 +834,25 @@ package "Dominio" {
     }
 
     class Bloque {
-        - nroBloque: Integer
         - numeroBloque: Integer
         + Bloque()
-        + Bloque(nroBloque: Integer)
-        + agregarItemPregunta(item: ItemPregunta): void
     }
 
     class ItemPregunta {
         - ordenVisualizacion: Integer
         - puntajeObtenido: Double
         + ItemPregunta()
-        + ItemPregunta(pregunta: Pregunta, ordenVisualizacion: Integer)
-        + agregarItemOpcion(itemOpcion: ItemOpcion): void
     }
 
     class ItemOpcion {
-        - respondido: Boolean
         - estaRespondida: Boolean
         + ItemOpcion()
-        + ItemOpcion(opcion: Opcion)
         + setEstaRespondida(estaRespondida: Boolean): void
     }
 
     class PuntajeCompetencia {
         - puntaje: Double
         + PuntajeCompetencia()
-        + PuntajeCompetencia(competencia: Competencia)
         + getPuntajesFactores(): List<PuntajeFactor>
         + setPuntaje(puntaje: Double): void
     }
@@ -973,7 +860,8 @@ package "Dominio" {
     class PuntajeFactor {
         - puntaje: Double
         + PuntajeFactor()
-        + PuntajeFactor(factor: Factor, puntaje: Double)
+        + setFactor(factor: Factor): void
+        + setPuntaje(puntaje: Double): void
     }
 }
 
@@ -1028,22 +916,13 @@ DAO <|-- EmpresaRepository
 DAO <|-- ConsultorRepository
 DAO <|-- AuditoriaDAO
 
-' --- Implementaciones DAO (Inversión de Dependencias) ---
-CandidatoDAOImpl ..|> CandidatoRepository
-EvaluacionDAOImpl ..|> EvaluacionRepository
-CuestionarioDAOImpl ..|> CuestionarioRepository
-PreguntaDAOImpl ..|> PreguntaRepository
-PuestoDAOImpl ..|> PuestoRepository
-CompetenciaDAOImpl ..|> CompetenciaRepository
-FactorDAOImpl ..|> FactorRepository
-EmpresaDAOImpl ..|> EmpresaRepository
-ConsultorDAOImpl ..|> ConsultorRepository
-AuditoriaDAOImpl ..|> AuditoriaDAO
-
 ' --- Servicios -> Repositorios / DAOs y Otros Servicios ---
 SecurityService ..> ConsultorRepository : "valida usuario"
 SecurityService ..> CuestionarioRepository : "valida acceso"
 SecurityService ..> CandidatoService : "obtiene perfil"
+SecurityService ..> JwtService : "genera token"
+SecurityService ..> LdapService : "obtiene perfil consultor"
+AuthController ..> JwtService : "cookie de sesión"
 
 CandidatoService ..> CandidatoRepository : "consulta / persiste"
 
@@ -1073,13 +952,13 @@ EvaluacionService ..> ConsultorRepository : "obtiene consultor"
 
 CuestionarioService ..> CuestionarioRepository : "obtiene / guarda"
 CuestionarioService ..> EvaluacionService : "genera estructura fallback"
-CuestionarioService ..> PuntajeAsyncService : "dispara cálculo async"
+CuestionarioVencimientoScheduler ..> CuestionarioService : "finaliza vencidos"
+PuntajeAsyncService ..> CuestionarioCompletadoEvent : "escucha (AFTER_COMMIT)"
 PuntajeAsyncService ..> CuestionarioRepository : "persiste puntajes"
 
 ReporteService ..> PuestoRepository : "obtiene puesto"
 ReporteService ..> EvaluacionRepository : "obtiene evaluaciones"
 ReporteService ..> CuestionarioRepository : "obtiene cuestionarios y puntajes"
-ReporteService ..> CandidatoRepository : "obtiene candidatos"
 ReporteService ..> PuntajeAsyncService : "calcula puntaje pendiente"
 
 EmpresaService ..> EmpresaRepository : "consulta"
@@ -1090,44 +969,38 @@ ServicioAuditoria ..> AuditoriaDAO : "registra auditoría"
 PuestoService ..> AltaPuestoDTO : "procesa <"
 PuestoService ..> PuestoDTO_Seleccion : "retorna >"
 
-PreguntaService ..> AltaPreguntaDTO : "procesa <"
 PreguntaService ..> PreguntaDTO_Guardar : "procesa <"
 PreguntaService ..> PreguntaDTO_Resumen : "retorna >"
 PreguntaService ..> PreguntaDTO_Detalle : "retorna >"
 
-EvaluacionService ..> ClaveEvaluacionCandidatoDTO : "retorna >"
 EvaluacionService ..> EvaluacionDTO_Generar : "procesa <"
 EvaluacionService ..> EvaluacionDTO_ClaveGenerada : "retorna >"
 
-CuestionarioService ..> InicioCuestionarioDTO : "retorna >"
-CuestionarioService ..> BloquePreguntasDTO : "retorna >"
-CuestionarioService ..> RespuestasBloqueDTO : "procesa <"
 CuestionarioService ..> CuestionarioDTO_Inicio : "retorna >"
 CuestionarioService ..> CuestionarioDTO_Bloque : "retorna >"
 CuestionarioService ..> CuestionarioCompletadoEvent : "publica >"
 
-ReporteService ..> ReporteOrdenMeritoDTO : "emite >"
 ReporteService ..> ReporteComparativoDTO : "emite >"
 ReporteService ..> EvaluacionDTO_ReporteOrdenMerito : "emite >"
 
-IaGeneracionService ..> PreguntaGeneradaIADTO : "genera >"
 IaGeneracionService ..> PreguntaDTO_IaPeticion : "procesa <"
 IaGeneracionService ..> PreguntaDTO_IaRespuesta : "genera >"
+
+SecurityService ..> CandidatoDTO_IniciarSesion : "procesa <"
+AuthController ..> CandidatoDTO_SesionIniciada : "retorna >"
 
 ' --- Estructura interna de DTOs ---
 AltaPuestoDTO "1" *-- "1..*" CompetenciaPuestoDTO
 
-AltaPreguntaDTO "1" *-- "2..*" OpcionPreguntaDTO
 PreguntaDTO_Guardar "1" *-- "2..*" PreguntaDTO_OpcionGuardar
+PreguntaDTO_Detalle "1" *-- "2..*" PreguntaDTO_OpcionDetalle
+PreguntaDTO_IaRespuesta "1" *-- "2..*" PreguntaDTO_OpcionGenerada
 PuestoDTO_Seleccion "1" *-- "1..*" PuestoDTO_CompetenciaRequerida
 EvaluacionDTO_ReporteOrdenMerito "1" *-- "0..*" EvaluacionDTO_ReporteCandidato
 
 ReporteComparativoDTO "1" *-- "1..*" ComparativaCompetenciaDTO
-BloquePreguntasDTO "1" *-- "1..*" ItemPreguntaDTO
-ItemPreguntaDTO "1" *-- "2..*" ItemOpcionDTO
-RespuestasBloqueDTO "1" *-- "1..*" RespuestaItemDTO
-ReporteOrdenMeritoDTO "1" *-- "0..*" CandidatoResultadoDTO
-PreguntaGeneradaIADTO "1" *-- "2..*" OpcionGeneradaIADTO
+CuestionarioDTO_Bloque "1" *-- "1..*" CuestionarioDTO_ItemPregunta
+CuestionarioDTO_ItemPregunta "1" *-- "2..*" CuestionarioDTO_ItemOpcion
 
 ' --- DAOs -> Entidades de Dominio ---
 CandidatoRepository ..> Candidato
@@ -1155,8 +1028,8 @@ Empresa "1" *-- "0..*" Puesto
 Consultor "1" <-- "*" Evaluacion : "crea"
 Puesto "1" <-- "*" Evaluacion : "examina"
 
-Puesto "1" *-- "1..*" CompetenciaPuesto
-CompetenciaPuesto "*" --> "1" Competencia
+Puesto "1" *-- "1..*" PuestoCompetencia
+PuestoCompetencia "*" --> "1" Competencia
 
 Competencia "1" *-- "1..*" Factor
 Factor "1" *-- "0..*" Pregunta

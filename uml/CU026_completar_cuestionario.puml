@@ -251,7 +251,8 @@ else El actor presiona "Comenzar Evaluacion"
                                 end
                                 opt El factor fue evaluado
                                     create PF
-                                    PA -> PF : <<create>> new PuntajeFactor(factor, sumaPesosFactor / 2.0)
+                                    PA -> PF : <<create>> new PuntajeFactor()
+                                    PA -> PF : setFactor(factor), setPuntaje(sumaPesosFactor / 2.0)
                                     PA -> PCo : getPuntajesFactores().add(fScore)
                                 end
                             end

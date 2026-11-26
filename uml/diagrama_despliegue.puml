@@ -35,29 +35,33 @@ node "PC del Candidato" <<device>> as pcCandidato {
 node "Impresora" <<device>> as impresora
 
 ' ==========================================
-' SERVIDOR DE LA CONSULTORA (Docker Compose)
+' SERVIDOR DE LA CONSULTORA
 ' ==========================================
-node "Servidor de aplicaciones (Docker Host)" <<device>> as servidor {
+node "Servidor de aplicaciones" <<device>> as servidor {
 
-    artifact "docker-compose.yml" <<deployment spec>> as compose
-
-    node "capital-humano-web" <<container>> as cWeb {
-        node "nginx:1.27" <<executionEnvironment>> as nginx {
-            artifact "capital-humano-web\n(build de React)" as spa
-            artifact "nginx.conf" <<deployment spec>> as nginxConf
-        }
+    node "Node.js / Vite" <<executionEnvironment>> as vite {
+        artifact "frontend\n(SPA React 19) :3000" as spa
+        artifact ".env (front)" <<deployment spec>> as envFront
     }
 
-    node "capital-humano-api" <<container>> as cApi {
-        node "eclipse-temurin:21-jre" <<executionEnvironment>> as jre {
-            artifact "capital-humano-api.jar\n(Spring Boot 3, Tomcat embebido)" as jar
-            artifact "application.yml" <<deployment spec>> as appYml
-        }
+    node "JRE 21" <<executionEnvironment>> as jre {
+        artifact "capitalhumano.jar\n(Spring Boot 4.1, Tomcat embebido) :8080" as jar
+        artifact "application.properties\n.env (back)" <<deployment spec>> as appProps
     }
 
-    node "capital-humano-db" <<container>> as cDb {
-        node "postgres:16" <<executionEnvironment>> as pg {
-            artifact "esquema_capital.sql" as sql
+    node "Docker Engine" <<executionEnvironment>> as docker {
+        artifact "compose.yaml" <<deployment spec>> as compose
+
+        node "capitalhumano_postgres" <<container>> as cDb {
+            node "postgres:16-alpine" <<executionEnvironment>> as pg {
+                artifact "01-init.sql" as sql
+            }
+        }
+
+        node "capitalhumano_ldap" <<container>> as cLdap {
+            node "osixia/openldap:1.5.0" <<executionEnvironment>> as ldap {
+                artifact "consultores.ldif" as ldif
+            }
         }
     }
 }
@@ -65,12 +69,8 @@ node "Servidor de aplicaciones (Docker Host)" <<device>> as servidor {
 ' ==========================================
 ' SISTEMAS EXTERNOS
 ' ==========================================
-node "Servidor LDAP de la organizacion" <<device>> as srvLdap {
-    node "Servicio de directorio LDAP" <<executionEnvironment>> as ldap
-}
-
 node "Servicio de IA (externo)" <<device>> as srvIA {
-    node "API REST de IA generativa" <<executionEnvironment>> as apiIA
+    node "Google Gemini API" <<executionEnvironment>> as apiIA
 }
 
 node "Servidor del Sistema de Gestion\nde Candidatos y CV" <<device>> as srvCV {
@@ -80,20 +80,22 @@ node "Servidor del Sistema de Gestion\nde Candidatos y CV" <<device>> as srvCV {
 ' ==========================================
 ' CAMINOS DE COMUNICACION
 ' ==========================================
-' El navegador descarga el build de React desde el contenedor web y,
-' una vez cargada, la SPA invoca directamente a la API REST
-pcConsultor "1..*" -- "1" cWeb : <<HTTPS>>
-pcConsultor "1..*" -- "1" cApi : <<HTTPS>>
-pcCandidato "1..*" -- "1" cWeb : <<HTTPS>>
-pcCandidato "1..*" -- "1" cApi : <<HTTPS>>
-cApi "1" -- "1" cDb : <<JDBC>>
-cApi "1" -- "1" srvLdap : <<LDAP>>
-cApi "1" -- "1" srvIA : <<HTTPS>>
+' El navegador descarga la SPA desde Vite y, una vez cargada,
+' la SPA invoca directamente a la API REST del backend
+pcConsultor "1..*" -- "1" spa : <<HTTP>>
+pcConsultor "1..*" -- "1" jar : <<HTTP / REST + cookie JWT>>
+pcCandidato "1..*" -- "1" spa : <<HTTP>>
+pcCandidato "1..*" -- "1" jar : <<HTTP / REST + cookie JWT>>
+jar "1" -- "1" cDb : <<JDBC>>
+jar "1" -- "1" cLdap : <<LDAP>>
+jar "1" -- "1" srvIA : <<HTTPS>>
 impresora "1" -- "1..*" pcConsultor : <<USB / TCP-IP>>
 srvCV "1" -- "1..*" pcConsultor : <<archivo CSV>>
 
 ' Especificaciones de despliegue
-nginxConf ..> spa
-appYml ..> jar
+envFront ..> spa
+appProps ..> jar
+compose ..> cDb
+compose ..> cLdap
 
 @enduml
