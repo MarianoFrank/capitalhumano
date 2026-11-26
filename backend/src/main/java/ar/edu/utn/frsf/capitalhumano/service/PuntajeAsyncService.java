@@ -29,7 +29,7 @@ public class PuntajeAsyncService {
         calcularPuntajeSincrono(event.idCuestionario());
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Double calcularPuntajeSincrono(Long idCuestionario) {
 
         Cuestionario cuestionario = cuestionarioRepository.findById(idCuestionario)
@@ -54,7 +54,6 @@ public class PuntajeAsyncService {
             compScore.setPuntajesFactores(new ArrayList<>());
 
             double sumaTotalesFactores = 0.0;
-            int cantidadFactoresDeEstaCompetencia = competency.getFactores().size();
 
             for (Factor factor : competency.getFactores()) {
                 boolean factorFueEvaluado = false;
@@ -110,8 +109,9 @@ public class PuntajeAsyncService {
             }
 
             double puntajeCompetencia = 0.0;
-            if (cantidadFactoresDeEstaCompetencia > 0) {
-                puntajeCompetencia = sumaTotalesFactores / cantidadFactoresDeEstaCompetencia;
+            int cantidadFactoresEvaluados = compScore.getPuntajesFactores().size();
+            if (cantidadFactoresEvaluados > 0) {
+                puntajeCompetencia = sumaTotalesFactores / cantidadFactoresEvaluados;
             }
 
             compScore.setPuntaje(puntajeCompetencia);

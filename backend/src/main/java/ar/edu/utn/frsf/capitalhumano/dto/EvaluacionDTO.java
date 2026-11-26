@@ -5,6 +5,9 @@ import ar.edu.utn.frsf.capitalhumano.model.Cuestionario;
 import ar.edu.utn.frsf.capitalhumano.model.Puesto;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,7 +17,9 @@ public final class EvaluacionDTO {
 
     // Petición: Generación de evaluación masiva para candidatos en un puesto
     public record Generar(
+            @NotNull(message = "El ID del puesto es obligatorio")
             Long idPuesto,
+            @NotEmpty(message = "Debe seleccionar al menos un candidato")
             List<Long> idsCandidatos
     ) {}
 

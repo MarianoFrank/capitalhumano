@@ -34,6 +34,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(body);
     }
 
+    // Maneja conflictos de reglas de negocio (pregunta duplicada, candidato ocupado,
+    // cuestionario vencido o sin accesos, etc.) (HTTP 409 Conflict)
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalStateException(
+            IllegalStateException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONFLICT;
+        String errorMessage = ex.getMessage() != null ? ex.getMessage() : "Conflicto con el estado actual del recurso.";
+        ApiErrorResponse body = new ApiErrorResponse(
+                status.value(),
+                status.getReasonPhrase(),
+                errorMessage,
+                request.getRequestURI());
+        return ResponseEntity.status(status).body(body);
+    }
+
     // Maneja violaciones de restricciones de integridad en base de datos (claves
     // únicas duplicadas, claves foráneas, etc.) (HTTP 409 Conflict)
     @ExceptionHandler(DataIntegrityViolationException.class)

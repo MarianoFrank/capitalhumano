@@ -16,6 +16,14 @@ public interface PreguntaRepository extends JpaRepository<Pregunta, Long> {
     @EntityGraph(attributePaths = { "opciones" })
     Optional<Pregunta> findByIdAndFechaBajaIsNull(Long id);
 
+    boolean existsByFactorIdAndNombreIgnoreCaseAndFechaBajaIsNull(Long factorId, String nombre);
+
+    boolean existsByFactorIdAndTextoIgnoreCaseAndFechaBajaIsNull(Long factorId, String texto);
+
+    boolean existsByFactorIdAndNombreIgnoreCaseAndFechaBajaIsNullAndIdNot(Long factorId, String nombre, Long id);
+
+    boolean existsByFactorIdAndTextoIgnoreCaseAndFechaBajaIsNullAndIdNot(Long factorId, String texto, Long id);
+
     @EntityGraph(attributePaths = { "opciones" })
     @Query("""
         SELECT DISTINCT q

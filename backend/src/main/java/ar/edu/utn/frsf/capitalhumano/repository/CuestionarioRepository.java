@@ -29,4 +29,8 @@ public interface CuestionarioRepository extends JpaRepository<Cuestionario, Long
 
     // Trae los cuestionarios de TODAS las evaluaciones de un puesto particular
     List<Cuestionario> findByEvaluacionPuestoId(Long puestoId);
+
+    List<Cuestionario> findByCandidatoIdInAndEstadoIn(List<Long> idsCandidatos, List<EstadoCuestionario> estados);
+
+    List<Cuestionario> findByEstadoIn(List<EstadoCuestionario> estados);
 }

@@ -1,0 +1,99 @@
+@startuml DiagramaDespliegue
+!pragma layout elk
+
+title Diagrama de Despliegue - Capit@l Humano
+
+skinparam shadowing false
+skinparam roundcorner 6
+skinparam DefaultFontName "Roboto"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #333333
+skinparam node {
+    BackgroundColor #FFFFFF
+    BorderColor #424242
+    BackgroundColor<<device>> #F7F7F7
+    BackgroundColor<<container>> #EFF4F8
+}
+skinparam artifact {
+    BackgroundColor #FFF8E1
+    BorderColor #E65100
+    BackgroundColor<<deployment spec>> #F3E5F5
+    BorderColor<<deployment spec>> #6A1B9A
+}
+
+' ==========================================
+' CLIENTES
+' ==========================================
+node "PC del Consultor" <<device>> as pcConsultor {
+    node "Navegador web" <<executionEnvironment>> as navConsultor
+}
+
+node "PC del Candidato" <<device>> as pcCandidato {
+    node "Navegador web" <<executionEnvironment>> as navCandidato
+}
+
+node "Impresora" <<device>> as impresora
+
+' ==========================================
+' SERVIDOR DE LA CONSULTORA (Docker Compose)
+' ==========================================
+node "Servidor de aplicaciones (Docker Host)" <<device>> as servidor {
+
+    artifact "docker-compose.yml" <<deployment spec>> as compose
+
+    node "capital-humano-web" <<container>> as cWeb {
+        node "nginx:1.27" <<executionEnvironment>> as nginx {
+            artifact "capital-humano-web\n(build de React)" as spa
+            artifact "nginx.conf" <<deployment spec>> as nginxConf
+        }
+    }
+
+    node "capital-humano-api" <<container>> as cApi {
+        node "eclipse-temurin:21-jre" <<executionEnvironment>> as jre {
+            artifact "capital-humano-api.jar\n(Spring Boot 3, Tomcat embebido)" as jar
+            artifact "application.yml" <<deployment spec>> as appYml
+        }
+    }
+
+    node "capital-humano-db" <<container>> as cDb {
+        node "postgres:16" <<executionEnvironment>> as pg {
+            artifact "esquema_capital.sql" as sql
+        }
+    }
+}
+
+' ==========================================
+' SISTEMAS EXTERNOS
+' ==========================================
+node "Servidor LDAP de la organizacion" <<device>> as srvLdap {
+    node "Servicio de directorio LDAP" <<executionEnvironment>> as ldap
+}
+
+node "Servicio de IA (externo)" <<device>> as srvIA {
+    node "API REST de IA generativa" <<executionEnvironment>> as apiIA
+}
+
+node "Servidor del Sistema de Gestion\nde Candidatos y CV" <<device>> as srvCV {
+    node "Sistema de Gestion de Candidatos y CV" <<executionEnvironment>> as sistCV
+}
+
+' ==========================================
+' CAMINOS DE COMUNICACION
+' ==========================================
+' El navegador descarga el build de React desde el contenedor web y,
+' una vez cargada, la SPA invoca directamente a la API REST
+pcConsultor "1..*" -- "1" cWeb : <<HTTPS>>
+pcConsultor "1..*" -- "1" cApi : <<HTTPS>>
+pcCandidato "1..*" -- "1" cWeb : <<HTTPS>>
+pcCandidato "1..*" -- "1" cApi : <<HTTPS>>
+cApi "1" -- "1" cDb : <<JDBC>>
+cApi "1" -- "1" srvLdap : <<LDAP>>
+cApi "1" -- "1" srvIA : <<HTTPS>>
+impresora "1" -- "1..*" pcConsultor : <<USB / TCP-IP>>
+srvCV "1" -- "1..*" pcConsultor : <<archivo CSV>>
+
+' Especificaciones de despliegue
+nginxConf ..> spa
+appYml ..> jar
+
+@enduml

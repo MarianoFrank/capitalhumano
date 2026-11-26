@@ -1,0 +1,220 @@
+@startuml CU028_EmitirOrdenDeMerito
+
+title CU028 - Emitir Orden de Merito
+
+actor Consultor as A
+
+box "Frontend" #F7F7F7
+    participant ":OrdenMeritoView" as V
+    participant ":ReporteOrdenMeritoView" as RV
+end box
+
+box "Backend" #EFF4F8
+    participant ":EmpresaController" as EmC
+    participant ":EmpresaService" as SEm
+    participant ":EmpresaRepository" as EmR
+    participant ":ReporteController" as RC
+    participant ":ReporteService" as SR
+    participant ":PuestoRepository" as PuR
+    participant ":EvaluacionRepository" as ER
+    participant ":CuestionarioRepository" as CuR
+    participant ":PuntajeAsyncService" as PA
+    participant "reporte : EvaluacionDTO.ReporteOrdenMerito" as R
+    participant "resultado : EvaluacionDTO.ReporteCandidato" as CR
+end box
+
+== Pasos 1 y 2 - El actor selecciona del menu la opcion Orden de Merito ==
+
+A -> V : abrirOrdenMerito()
+activate V
+
+V -> EmC : GET /api/empresas/select
+activate EmC
+EmC -> SEm : obtenerEmpresasParaSelect()
+activate SEm
+SEm -> EmR : findByFechaBajaIsNullOrderByNombreAsc()
+activate EmR
+EmR --> SEm : List<Empresa>
+deactivate EmR
+SEm --> EmC : List<ComunDTO.ItemSeleccion>
+deactivate SEm
+EmC --> V : 200 OK { List<ComunDTO.ItemSeleccion> }
+deactivate EmC
+
+V --> A : pantalla con criterios de busqueda (Empresa, Puesto, Codigo)
+deactivate V
+
+== Paso 3 - El actor ingresa los criterios de busqueda ==
+
+alt 2.A - El actor presiona "Cancelar" / abandona la pantalla
+
+    A -> V : cancelar()
+    activate V
+    V --> A : retorna sin emitir reporte
+    deactivate V
+    note right of V : 2.A.1 - El CU termina
+
+else El actor presiona "Buscar"
+
+    A -> V : buscar(idEmpresa, nombrePuesto, codigo)
+    activate V
+
+    == Paso 4 - El sistema presenta los puestos que coinciden con la busqueda ==
+
+    V -> RC : GET /api/reportes/puestos?idEmpresa&nombrePuesto&codigo&page&size
+    activate RC
+    RC -> SR : obtenerPuestosParaReporte(idEmpresa, nombrePuesto, codigo, pageable)
+    activate SR
+    SR -> PuR : buscarParaReporte(idEmpresa, nombreFiltro, codigoFiltro, pageable)
+    activate PuR
+    PuR --> SR : Page<Puesto>
+    deactivate PuR
+
+    loop por cada Puesto de la pagina
+        SR -> CuR : findByEvaluacionPuestoId(puesto.getId())
+        activate CuR
+        CuR --> SR : List<Cuestionario>
+        deactivate CuR
+    end
+
+    SR --> RC : Page<PuestoDTO.Resumen>
+    deactivate SR
+    RC --> V : 200 OK { Page<PuestoDTO.Resumen> }
+    deactivate RC
+
+    V --> A : grilla con Codigo, Puesto, Empresa,\nTotal Candidatos y Evaluaciones Completadas
+    deactivate V
+
+    == Paso 5 - El actor presiona "Emitir orden de merito" en un puesto de la grilla ==
+
+    A -> V : emitirOrdenMerito(idPuesto)
+    activate V
+
+    == Paso 6 - El sistema solicita que se seleccione una o todas las evaluaciones ==
+
+    V -> RC : GET /api/reportes/puestos/{idPuesto}/evaluaciones
+    activate RC
+    RC -> SR : obtenerResumenEvaluacionesPorPuesto(idPuesto)
+    activate SR
+    SR -> ER : findByPuestoId(idPuesto)
+    activate ER
+    ER --> SR : List<Evaluacion>
+    deactivate ER
+
+    loop por cada Evaluacion del puesto
+        SR -> CuR : findByEvaluacionId(ev.getId())
+        activate CuR
+        CuR --> SR : List<Cuestionario>
+        deactivate CuR
+    end
+
+    SR --> RC : List<EvaluacionDTO.Resumen>
+    deactivate SR
+    RC --> V : 200 OK { List<EvaluacionDTO.Resumen> }
+    deactivate RC
+
+    alt 6.A - El puesto no posee evaluaciones o ninguna tiene cuestionarios completos
+
+        V --> A : informa que no hay evaluaciones disponibles para emitir orden de merito
+        deactivate V
+
+    else El puesto posee evaluaciones para consultar
+
+        V --> A : ventana "Seleccione una o todas las evaluaciones"
+        deactivate V
+
+        A -> V : seleccionarEvaluacion(idEvaluacion o Todas)
+        A -> V : generar()
+        activate V
+
+        == Paso 7 - El sistema emite el listado de los candidatos evaluados para el puesto ==
+
+        V -> RV : mostrar(idPuesto, idEvaluacion)
+        deactivate V
+        activate RV
+
+        ' Si se elige "Todas", idEvaluacion se omite (null)
+        RV -> RC : GET /api/reportes/orden-merito/{idPuesto}?idEvaluacion={idEvaluacion}
+        activate RC
+        RC -> SR : generarOrdenMerito(idPuesto, idEvaluacion)
+        activate SR
+
+        SR -> PuR : findById(idPuesto)
+        activate PuR
+        PuR --> SR : Optional<Puesto>
+        deactivate PuR
+
+        alt Se selecciono una evaluacion puntual (idEvaluacion != null)
+            SR -> ER : findById(idEvaluacion)
+            activate ER
+            ER --> SR : Optional<Evaluacion>
+            deactivate ER
+            SR -> CuR : findByEvaluacionId(idEvaluacion)
+            activate CuR
+            CuR --> SR : List<Cuestionario>
+            deactivate CuR
+        else Se selecciono la opcion Todas (idEvaluacion == null)
+            SR -> CuR : findByEvaluacionPuestoId(idPuesto)
+            activate CuR
+            CuR --> SR : List<Cuestionario>
+            deactivate CuR
+        end
+
+        loop por cada Cuestionario de List<Cuestionario>
+
+            ' Si esta COMPLETED pero el calculo asincrono aun no persistio puntajes, los calcula sincronamente
+            opt Cuestionario COMPLETED sin puntaje calculado
+                SR -> PA : calcularPuntajeSincrono(cuestionario.getId())
+                activate PA
+                PA --> SR : Double puntajeTotal
+                deactivate PA
+                SR -> CuR : findById(cuestionario.getId())
+                activate CuR
+                CuR --> SR : Optional<Cuestionario>
+                deactivate CuR
+            end
+
+            create CR
+            SR -> CR : <<create>> EvaluacionDTO.ReporteCandidato.from(cuestionario)
+
+            SR -> SR : esCandidatoAprobado(cuestionario, puesto)
+            activate SR #E8E8E8
+            deactivate SR
+
+            alt Estado COMPLETED y alcanzo las ponderaciones minimas de cada competencia del puesto
+                note right of SR : Agrega resultado a lista aprobados
+            else No alcanzo las ponderaciones o su estado no es COMPLETED
+                note right of SR : Agrega resultado a lista noAprobados
+            end
+
+        end
+
+        note right of SR : Ordena aprobados y noAprobados\ndescendentemente por puntaje (nulos al final)
+
+        ' emitidoPor se obtiene de SecurityContextHolder
+        create R
+        SR -> R : <<create>> EvaluacionDTO.ReporteOrdenMerito.from(\n    puesto, nombreConsultor, fechaEmision, aprobados, noAprobados)
+
+        SR --> RC : EvaluacionDTO.ReporteOrdenMerito
+        deactivate SR
+        RC --> RV : 200 OK { EvaluacionDTO.ReporteOrdenMerito }
+        deactivate RC
+
+        RV --> A : orden de merito del puesto (aprobados ordenados por puntaje\ny candidatos rechazados o incompletos con su estado)
+        deactivate RV
+
+        == Pasos 8 y 9 - Exportacion / impresion del reporte ==
+
+        opt El actor selecciona "Descargar PDF" / Imprimir
+            A -> RV : generarPdf()
+            activate RV
+            RV --> A : archivo PDF generado para descargar o imprimir
+            deactivate RV
+        end
+
+    end
+end
+
+== Paso 10 - El CU termina ==
+
+@enduml

@@ -108,8 +108,8 @@ export default function CrearPregunta() {
             await preguntasService.crearPregunta(payload);
             mostrarExito('¡Pregunta creada con éxito!');
             setTimeout(() => navigate('/preguntas'), 1200);
-        } catch {
-            mostrarError('Hubo un error al guardar la pregunta.');
+        } catch (error) {
+            mostrarError(error.response?.data?.message || 'Hubo un error al guardar la pregunta.');
         }
     };
 

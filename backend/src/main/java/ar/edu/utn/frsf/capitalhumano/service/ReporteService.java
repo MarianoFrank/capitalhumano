@@ -39,13 +39,18 @@ public class ReporteService {
         this.puntajeAsyncService = puntajeAsyncService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public EvaluacionDTO.ReporteOrdenMerito generarOrdenMerito(Long idPuesto, Long idEvaluacion) {
         Puesto puesto = puestoRepository.findById(idPuesto)
-                .orElseThrow(() -> new RuntimeException("Puesto no encontrado con ID: " + idPuesto));
+                .orElseThrow(() -> new IllegalArgumentException("Puesto no encontrado con ID: " + idPuesto));
 
         List<Cuestionario> cuestionarios;
         if (idEvaluacion != null) {
+            Evaluacion evaluacion = evaluacionRepository.findById(idEvaluacion)
+                    .orElseThrow(() -> new IllegalArgumentException("Evaluación no encontrada con ID: " + idEvaluacion));
+            if (evaluacion.getPuesto() == null || !evaluacion.getPuesto().getId().equals(idPuesto)) {
+                throw new IllegalArgumentException("La evaluación seleccionada no pertenece al puesto indicado.");
+            }
             cuestionarios = cuestionarioRepository.findByEvaluacionId(idEvaluacion);
         } else {
             cuestionarios = cuestionarioRepository.findByEvaluacionPuestoId(idPuesto);

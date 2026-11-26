@@ -19,6 +19,12 @@ public class EvaluacionController {
         this.evaluacionService = evaluacionService;
     }
 
+    @PostMapping("/validar-candidatos")
+    public ResponseEntity<Void> validarCandidatos(@RequestBody List<Long> idsCandidatos) {
+        evaluacionService.validarCandidatosDisponibles(idsCandidatos);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/generar")
     public ResponseEntity<List<EvaluacionDTO.ClaveGenerada>> generar(@Valid @RequestBody EvaluacionDTO.Generar peticion) {
         List<EvaluacionDTO.ClaveGenerada> claves = evaluacionService.generarEvaluacion(peticion);

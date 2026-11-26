@@ -1,0 +1,286 @@
+@startuml CU025_EvaluarCandidatos
+
+title CU025 - Evaluar a Candidatos
+
+actor Consultor as A
+
+box "Frontend" #F7F7F7
+    participant ":BusquedaCandidatosView" as BV
+    participant ":EvaluacionCandidatosView" as EV
+end box
+
+box "Backend" #EFF4F8
+    participant ":CandidatoController" as CaC
+    participant ":CandidatoService" as SCa
+    participant ":CandidatoRepository" as CaR
+    participant ":PuestoController" as PuC
+    participant ":PuestoService" as SPu
+    participant ":PuestoRepository" as PuR
+    participant ":CompetenciaRepository" as CoR
+    participant ":EvaluacionController" as EC
+    participant ":EvaluacionService" as SE
+    participant ":ConsultorRepository" as ConR
+    participant ":EvaluacionRepository" as ER
+    participant ":PreguntaRepository" as PR
+    participant ":CuestionarioRepository" as CuR
+end box
+
+== Pasos 1 y 2 - El actor selecciona del menu la opcion Evaluar Candidatos ==
+
+A -> BV : abrirEvaluarCandidatos()
+activate BV
+BV --> A : pantalla de Busqueda de Candidatos\n(filtros: Nombre, Apellido, Numero de Candidato)
+deactivate BV
+
+== Paso 3 - El actor completa los filtros ==
+
+A -> BV : buscar(nombre, apellido, numeroCandidato)
+activate BV
+BV -> CaC : GET /api/candidatos?nombre&apellido&numeroCandidato&page&size&sort
+activate CaC
+CaC -> SCa : obtenerCandidatosPaginados(nombre, apellido, numeroCandidato, pageable)
+activate SCa
+SCa -> CaR : buscarConFiltros(nombreFiltro, apellidoFiltro, numeroCandidato, pageable)
+activate CaR
+CaR --> SCa : Page<Candidato>
+deactivate CaR
+SCa --> CaC : Page<CandidatoDTO.Resumen>
+deactivate SCa
+CaC --> BV : 200 OK { Page<CandidatoDTO.Resumen> }
+deactivate CaC
+BV --> A : grilla de candidatos
+deactivate BV
+
+== Pasos 4 y 5 - Armado de la seleccion "Candidatos a evaluar" ==
+
+loop hasta que el actor presione "Siguiente"
+
+    alt Paso 4 - El actor selecciona uno o mas candidatos
+        A -> BV : seleccionarCandidatos(idsCandidatos)
+        activate BV
+        BV --> A : candidatos agregados a la seleccion
+        deactivate BV
+    else 4.A - No se han seleccionado candidatos
+        A -> BV : siguiente([])
+        activate BV
+        BV --> A : "Debe seleccionar uno o mas candidatos"
+        deactivate BV
+    else 5.A - El actor quita candidatos de la seleccion
+        A -> BV : quitarCandidatos(idsCandidatos)
+        activate BV
+        BV --> A : candidatos quitados de la seleccion
+        deactivate BV
+    end
+
+end
+
+== Paso 6 - El actor presiona "Siguiente" ==
+
+A -> BV : siguiente(idsCandidatos)
+activate BV
+
+' Un candidato no puede ser evaluado si ya tiene un cuestionario abierto
+BV -> EC : POST /api/evaluaciones/validar-candidatos { idsCandidatos }
+activate EC
+EC -> SE : validarCandidatosDisponibles(idsCandidatos)
+activate SE
+SE -> CuR : findByCandidatoIdInAndEstadoIn(idsCandidatos,\n    [EstadoCuestionario.ACTIVE, EstadoCuestionario.IN_PROGRESS])
+activate CuR
+CuR --> SE : List<Cuestionario>
+deactivate CuR
+
+alt 6.A - Existen candidatos con cuestionarios activos o en proceso
+
+    SE --> EC : IllegalStateException("Los siguientes candidatos poseen...")
+    deactivate SE
+    EC --> BV : 409 Conflict { ApiErrorResponse }
+    deactivate EC
+    BV --> A : "Los siguientes candidatos poseen cuestionarios activos\no en proceso y no pueden ser evaluados nuevamente: ..."
+    deactivate BV
+    note right of BV : El CU retorna al paso 4
+
+else Todos los candidatos estan disponibles
+
+    SE --> EC : OK
+    deactivate SE
+    EC --> BV : 200 OK
+    deactivate EC
+
+    == Paso 7 - El sistema presenta la seleccion de Puesto ==
+
+    BV -> EV : mostrar(idsCandidatos)
+    deactivate BV
+    activate EV
+
+    ' El endpoint retorna los puestos activos junto con el estado de evaluabilidad de cada competencia
+    EV -> PuC : GET /api/puestos/select
+    activate PuC
+    PuC -> SPu : obtenerPuestosParaSelect()
+    activate SPu
+    SPu -> PuR : findAllActivePositions()
+    activate PuR
+    PuR --> SPu : List<Puesto>
+    deactivate PuR
+    SPu -> CoR : findValidCompetencyIds()
+    activate CoR
+    CoR --> SPu : List<Long>
+    deactivate CoR
+    SPu --> PuC : List<PuestoDTO.Seleccion>
+    deactivate SPu
+    PuC --> EV : 200 OK { List<PuestoDTO.Seleccion> }
+    deactivate PuC
+    EV --> A : combo de puestos con competencias requeridas
+    deactivate EV
+
+    == Pasos 8 y 9 - El actor selecciona la funcion o puesto ==
+
+    A -> EV : seleccionarPuesto(puestoSeleccionado)
+    activate EV
+    EV --> A : empresa, competencias requeridas y su ponderacion
+
+    alt 9.A - Alguna competencia del puesto tiene cumpleCondicion == false
+
+        EV --> A : "Las siguientes competencias no cumplen las condiciones\npara ser evaluadas: ..." (boton Siguiente deshabilitado)
+        deactivate EV
+        note right of EV : 9.A.3 - El actor cancela o elige otro puesto
+
+    else Todas las competencias del puesto son evaluables
+
+        EV --> A : habilita el boton "Siguiente"
+        deactivate EV
+
+        == Pasos 10 y 11 - Confirmacion de candidatos a evaluar ==
+
+        A -> EV : siguiente()
+        activate EV
+        EV --> A : resumen del puesto y candidatos seleccionados
+        deactivate EV
+
+        == Paso 12 - El actor presiona "Finalizar" o "Cancelar" ==
+
+        alt 12.A - El actor presiona "Cancelar"
+
+            A -> EV : cancelar()
+            activate EV
+            EV --> A : cierra confirmacion sin generar evaluacion
+            deactivate EV
+
+        else El actor presiona "Finalizar"
+
+            A -> EV : finalizar()
+            activate EV
+            EV -> EC : POST /api/evaluaciones/generar { EvaluacionDTO.Generar }
+            activate EC
+            EC -> SE : generarEvaluacion(peticion)
+            activate SE
+
+            ' Revalidacion transaccional en backend
+            SE -> SE : validarCandidatosDisponibles(peticion.idsCandidatos())
+            activate SE #E8E8E8
+            SE -> CuR : findByCandidatoIdInAndEstadoIn(idsCandidatos,\n    [ACTIVE, IN_PROGRESS])
+            activate CuR
+            CuR --> SE : List<Cuestionario> (vacia)
+            deactivate CuR
+            deactivate SE
+
+            ' Consultor autenticado desde SecurityContextHolder
+            SE -> ConR : findByUsername(usernameConsultor)
+            activate ConR
+            ConR --> SE : Optional<Consultor>
+            deactivate ConR
+
+            SE -> PuR : findById(peticion.idPuesto())
+            activate PuR
+            PuR --> SE : Optional<Puesto>
+            deactivate PuR
+
+            SE -> SE : validarCompetenciasEvaluables(puesto)
+            activate SE #E8E8E8
+            SE -> CoR : findValidCompetencyIds()
+            activate CoR
+            CoR --> SE : List<Long>
+            deactivate CoR
+            deactivate SE
+
+            ' Parametros desde configuracion (@Value): duracionMinutos, preguntasPorBloque, codigo autogenerado
+            create participant "evaluacion : Evaluacion" as E
+            SE -> E : <<create>> new Evaluacion()
+            SE -> E : setCodigo(...), setPuesto(puesto), setConsultor(consultor),\nsetDuracion(duracionMinutos), setCantPreguntasPorBloque(preguntasPorBloque)
+            SE -> ER : save(evaluacion)
+            activate ER
+            ER --> SE : evaluacion
+            deactivate ER
+
+            ' Se sortean las preguntas UNA sola vez por evaluacion para garantizar el mismo modelo en todos los cuestionarios
+            SE -> SE : seleccionarPreguntasParaPuesto(puesto)
+            activate SE #E8E8E8
+            loop por cada factor activo de cada competencia del puesto
+                SE -> PR : findActiveByFactorId(factor.getId())
+                activate PR
+                PR --> SE : List<Pregunta>
+                deactivate PR
+            end
+            deactivate SE
+
+            loop por cada candidatoId de peticion.idsCandidatos()
+
+                SE -> CaR : findById(candidatoId)
+                activate CaR
+                CaR --> SE : Optional<Candidato>
+                deactivate CaR
+
+                SE -> SE : generarClaveAccesoUnica()
+                activate SE #E8E8E8
+                SE -> CuR : findByClaveAcceso(clave)
+                activate CuR
+                CuR --> SE : Optional.empty()
+                deactivate CuR
+                deactivate SE
+
+                create participant "cuestionario : Cuestionario" as C
+                SE -> C : <<create>> new Cuestionario()
+                SE -> C : setEvaluacion(evaluacion), setCandidato(candidato),\nsetClaveAcceso(claveAcceso), setEstado(EstadoCuestionario.ACTIVE)
+
+                ' Arma los Bloques, ItemPregunta e ItemOpcion usando las mismas preguntasModelo
+                SE -> SE : armarBloquesCuestionario(cuestionario, preguntasModelo, cantPreguntasPorBloque)
+                activate SE #E8E8E8
+                deactivate SE
+
+                SE -> CuR : save(cuestionario)
+                activate CuR
+                CuR --> SE : cuestionario
+                deactivate CuR
+
+            end
+
+            == Paso 13 - El sistema guarda la informacion ingresada ==
+
+            SE --> EC : List<EvaluacionDTO.ClaveGenerada>
+            deactivate SE
+            EC --> EV : 201 Created { List<EvaluacionDTO.ClaveGenerada> }
+            deactivate EC
+
+            EV --> A : lista de candidatos con su Clave de ingreso\n"¿Desea exportar la lista a un archivo excel?"
+            deactivate EV
+
+            == Pasos 14 a 17 - Exportacion opcional a excel ==
+
+            opt Paso 14 - El actor selecciona que desea exportar
+
+                A -> EV : exportarExcel()
+                activate EV
+                EV -> EV : generarLibroExcel(claves)
+                activate EV #E8E8E8
+                deactivate EV
+                EV --> A : descarga archivo .xls / .xlsx con claves
+                deactivate EV
+
+            end
+
+        end
+    end
+end
+
+== Paso 18 - El CU finaliza y retorna a la pantalla principal ==
+
+@enduml

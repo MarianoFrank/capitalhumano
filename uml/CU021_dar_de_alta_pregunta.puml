@@ -1,0 +1,203 @@
+@startuml CU021_DarDeAltaPregunta
+
+title CU021 - Dar de Alta Pregunta
+
+actor Consultor as A
+
+box "Frontend" #F7F7F7
+    participant ":AltaPreguntaView" as V
+end box
+
+box "Backend" #EFF4F8
+    participant ":CompetenciaController" as CC
+    participant ":CompetenciaService" as SC
+    participant ":CompetenciaRepository" as CR
+    participant ":FactorController" as FC
+    participant ":FactorService" as SF
+    participant ":FactorRepository" as FR
+    participant ":IaController" as IC
+    participant ":IaGeneracionService" as SIA
+    participant ":PreguntaController" as PC
+    participant ":PreguntaService" as SP
+    participant ":PreguntaRepository" as PR
+end box
+
+== Paso 1 - El sistema presenta la pantalla de alta de Preguntas ==
+
+A -> V : abrirAltaPregunta()
+activate V
+
+V -> CC : GET /api/competencias/select
+activate CC
+CC -> SC : obtenerCompetenciasParaSelect()
+activate SC
+SC -> CR : findByFechaBajaIsNullOrderByNombreAsc()
+activate CR
+CR --> SC : List<Competencia>
+deactivate CR
+SC --> CC : List<ComunDTO.ItemSeleccion>
+deactivate SC
+CC --> V : 200 OK { List<ComunDTO.ItemSeleccion> }
+deactivate CC
+
+V --> A : formulario de alta (Competencia, Factor, Nombre,\nPregunta, Descripcion, Tipo y Opciones de respuesta)
+deactivate V
+
+' Al seleccionar una Competencia se cargan sus Factores activos
+A -> V : seleccionarCompetencia(idCompetencia)
+activate V
+V -> FC : GET /api/factores/select?idCompetencia={idCompetencia}
+activate FC
+FC -> SF : obtenerFactoresParaSelect(idCompetencia)
+activate SF
+SF -> FR : findByCompetenciaIdAndFechaBajaIsNullOrderByNombreAsc(idCompetencia)
+activate FR
+FR --> SF : List<Factor>
+deactivate FR
+SF --> FC : List<ComunDTO.ItemSeleccion>
+deactivate SF
+FC --> V : 200 OK { List<ComunDTO.ItemSeleccion> }
+deactivate FC
+V --> A : combo de Factores cargado
+deactivate V
+
+== Carga de la pregunta y de sus opciones de respuesta ==
+
+A -> V : seleccionarFactor(idFactor)
+
+' Flujo alternativo 1.A.1: generacion asistida con IA (opcional, permite carga manual o edicion posterior)
+opt 1.A.1 - El actor presiona "Generar con IA"
+    A -> V : generarConIA(contextoExtra)
+    activate V
+    V -> IC : POST /api/ia/generar-pregunta { PreguntaDTO.IaPeticion }
+    activate IC
+    IC -> SIA : generarPregunta(peticion)
+    activate SIA
+    SIA --> IC : PreguntaDTO.IaRespuesta
+    deactivate SIA
+    IC --> V : 200 OK { PreguntaDTO.IaRespuesta }
+    deactivate IC
+    V --> A : campos sugeridos precargados en el formulario
+    deactivate V
+end
+
+' Flujo principal: carga manual o ajuste de datos
+A -> V : ingresarDatosPregunta(nombre, texto, descripcion)
+A -> V : seleccionarTipo(TipoPregunta.SINGLE_CHOICE | MULTIPLE_CHOICE)
+
+loop por cada opcion de respuesta de la pregunta (minimo 2)
+    A -> V : agregarOpcion(ordenVisualizacion, texto, ponderacion)
+end
+
+alt 1.A.2 - El actor presiona "Cancelar"
+
+    A -> V : cancelar()
+    activate V
+    V --> A : retorna sin guardar cambios
+    deactivate V
+    note right of V : El caso de uso termina
+
+else Paso 2 - El actor presiona "Aceptar"
+
+    A -> V : aceptar()
+    activate V
+
+    V -> PC : POST /api/preguntas { PreguntaDTO.Guardar }
+    activate PC
+
+    ' Spring ejecuta Bean Validation (@Valid) sobre PreguntaDTO.Guardar antes de invocar al servicio
+    alt 2.A / 2.B - Faltan datos obligatorios, opciones (< 2) o exceden su longitud maxima
+
+        PC --> V : 400 Bad Request { ApiErrorResponse }
+        deactivate PC
+        V --> A : mensaje detallando los errores de validacion
+        deactivate V
+
+    else Estructura de peticion valida
+
+        PC -> SP : crearPregunta(peticion)
+        activate SP
+
+        SP -> FR : findById(peticion.idFactor())
+        activate FR
+        FR --> SP : Optional<Factor>
+        deactivate FR
+
+        SP -> SP : validarPreguntaNoDuplicada(idFactor, nombre, texto, null)
+        activate SP #E8E8E8
+        SP -> PR : existsByFactorIdAndNombreIgnoreCaseAndFechaBajaIsNull(idFactor, nombre)
+        activate PR
+        PR --> SP : boolean existeNombre
+        deactivate PR
+        SP -> PR : existsByFactorIdAndTextoIgnoreCaseAndFechaBajaIsNull(idFactor, texto)
+        activate PR
+        PR --> SP : boolean existeTexto
+        deactivate PR
+        deactivate SP
+
+        SP -> SP : validarPonderacionesOpciones(peticion.opciones())
+        activate SP #E8E8E8
+        deactivate SP
+
+        alt 2.C.1 - Ya existe pregunta con el mismo nombre en el factor
+
+            SP --> PC : IllegalStateException("...nombre...")
+            deactivate SP
+            PC --> V : 409 Conflict { ApiErrorResponse }
+            deactivate PC
+            V --> A : "Ya existe una pregunta con ese nombre\npara el factor seleccionado"
+            deactivate V
+
+        else 2.C.2 - Ya existe pregunta con el mismo texto en el factor
+
+            SP --> PC : IllegalStateException("...texto...")
+            deactivate SP
+            PC --> V : 409 Conflict { ApiErrorResponse }
+            deactivate PC
+            V --> A : "Ya existe una pregunta con ese texto\npara el factor seleccionado"
+            deactivate V
+
+        else Las ponderaciones de las opciones no suman exactamente 10 puntos
+
+            SP --> PC : IllegalArgumentException("...sumar exactamente 10 puntos")
+            deactivate SP
+            PC --> V : 400 Bad Request { ApiErrorResponse }
+            deactivate PC
+            V --> A : "Las ponderaciones de las opciones deben\nsumar exactamente 10 puntos"
+            deactivate V
+
+        else Flujo principal - todos los datos y reglas son validos
+
+            create participant "pregunta : Pregunta" as P
+            SP -> P : <<create>> new Pregunta()
+            SP -> P : setFactor(factor), setNombre(...), setTexto(...), setTipo(...)
+
+            ' Las opciones pertenecen a esta pregunta (composicion)
+            loop por cada OpcionGuardar de peticion.opciones()
+                create participant "opcion : Opcion" as O
+                SP -> O : <<create>> new Opcion()
+                SP -> P : getOpciones().add(op)
+            end
+
+            SP -> PR : save(pregunta)
+            activate PR
+            PR --> SP : preguntaGuardada
+            deactivate PR
+
+            == Paso 3 - El sistema registra la nueva pregunta ==
+
+            SP --> PC : PreguntaDTO.Detalle
+            deactivate SP
+            PC --> V : 201 Created { PreguntaDTO.Detalle }
+            deactivate PC
+
+            V --> A : "La Pregunta se ha creado correctamente"
+            deactivate V
+
+        end
+    end
+end
+
+== Paso 4 - El CU termina ==
+
+@enduml

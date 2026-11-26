@@ -44,4 +44,11 @@ public class CuestionarioController {
         cuestionarioService.guardarRespuestasBloque(idCuestionario, numeroBloque, respuestas);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/{idCuestionario}/expirar")
+    @PreAuthorize("@securityService.esPropietarioCuestionario(#idCuestionario)")
+    public ResponseEntity<Void> expirar(@PathVariable Long idCuestionario) {
+        cuestionarioService.finalizarPorTiempoAgotado(idCuestionario);
+        return ResponseEntity.ok().build();
+    }
 }

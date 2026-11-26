@@ -36,4 +36,7 @@ public class Evaluacion {
 
     @Column(name = "duracion", nullable = false)
     private Integer duracion; // Duración en minutos
+
+    @Column(name = "cant_preguntas_por_bloque")
+    private Integer cantPreguntasPorBloque;
 }

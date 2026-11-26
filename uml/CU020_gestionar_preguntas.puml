@@ -1,0 +1,132 @@
+@startuml CU020_GestionarPreguntas
+
+title CU020 - Gestionar Preguntas
+
+actor Consultor as A
+
+box "Frontend" #F7F7F7
+    participant ":GestionarPreguntasView" as V
+end box
+
+box "Backend" #EFF4F8
+    participant ":CompetenciaController" as CC
+    participant ":CompetenciaService" as SC
+    participant ":CompetenciaRepository" as CR
+    participant ":FactorController" as FC
+    participant ":FactorService" as SF
+    participant ":FactorRepository" as FR
+    participant ":PreguntaController" as PC
+    participant ":PreguntaService" as SP
+    participant ":PreguntaRepository" as PR
+end box
+
+== Pasos 1 y 2 - El actor selecciona del menu la opcion Preguntas ==
+
+A -> V : abrirGestionPreguntas()
+activate V
+
+V -> CC : GET /api/competencias/select
+activate CC
+CC -> SC : obtenerCompetenciasParaSelect()
+activate SC
+SC -> CR : findByFechaBajaIsNullOrderByNombreAsc()
+activate CR
+CR --> SC : List<Competencia>
+deactivate CR
+SC --> CC : List<ComunDTO.ItemSeleccion>
+deactivate SC
+CC --> V : 200 OK { List<ComunDTO.ItemSeleccion> }
+deactivate CC
+
+V --> A : pantalla con criterios de busqueda\n(Competencia, Factor y Nombre de Pregunta)
+deactivate V
+
+' El filtro Factor depende de la Competencia elegida
+opt El actor filtra por Competencia
+    A -> V : seleccionarCompetencia(idCompetencia)
+    activate V
+    V -> FC : GET /api/factores/select?idCompetencia={idCompetencia}
+    activate FC
+    FC -> SF : obtenerFactoresParaSelect(idCompetencia)
+    activate SF
+    SF -> FR : findByCompetenciaIdAndFechaBajaIsNullOrderByNombreAsc(idCompetencia)
+    activate FR
+    FR --> SF : List<Factor>
+    deactivate FR
+    SF --> FC : List<ComunDTO.ItemSeleccion>
+    deactivate SF
+    FC --> V : 200 OK { List<ComunDTO.ItemSeleccion> }
+    deactivate FC
+    V --> A : combo de Factores cargado
+    deactivate V
+end
+
+== Pasos 3 a 5 - Busqueda y gestion sobre la grilla de resultados ==
+
+loop mientras el actor siga gestionando preguntas
+
+    alt Paso 3 - El actor busca preguntas (por criterios o paginacion)
+
+        A -> V : buscar(idCompetencia, idFactor, nombrePregunta)
+        activate V
+        V -> PC : GET /api/preguntas?idCompetencia&idFactor&nombrePregunta&page&size&sort
+        activate PC
+        PC -> SP : obtenerTodasLasPreguntasResumen(idCompetencia, idFactor, nombrePregunta, pageable)
+        activate SP
+
+        ' Requerimiento Especial: el criterio de busqueda es "contiene"
+        SP -> PR : buscarConFiltros(idCompetencia, idFactor, nombreFiltro, pageable)
+        activate PR
+        PR --> SP : Page<Pregunta>
+        deactivate PR
+
+        SP --> PC : Page<PreguntaDTO.Resumen>
+        deactivate SP
+        PC --> V : 200 OK { Page<PreguntaDTO.Resumen> }
+        deactivate PC
+
+        == Paso 4 - El sistema presenta la lista de preguntas ==
+
+        V --> A : grilla con Fecha Modificacion, Competencia, Factor y Pregunta
+        deactivate V
+
+        == Paso 5 - El actor selecciona una pregunta de la lista ==
+
+        A -> V : seleccionarPregunta(idPregunta)
+
+        alt 5.A - El actor presiona "Modificar"
+            ref over A, PC : CU022 - Modificar Pregunta
+        else 5.B - El actor presiona "Eliminar"
+            ref over A, PC : CU023 - Dar de Baja Pregunta
+        end
+
+    else 3.A - El actor presiona "Nuevo" sin haber buscado ninguna pregunta
+
+        ref over A, PC : CU021 - Dar de Alta Pregunta
+
+    end
+
+    ' Tras cada alta, modificacion o baja el sistema refresca la grilla
+    activate V
+    V -> PC : GET /api/preguntas?idCompetencia&idFactor&nombrePregunta&page&size&sort
+    activate PC
+    PC -> SP : obtenerTodasLasPreguntasResumen(idCompetencia, idFactor, nombrePregunta, pageable)
+    activate SP
+    SP -> PR : buscarConFiltros(idCompetencia, idFactor, nombreFiltro, pageable)
+    activate PR
+    PR --> SP : Page<Pregunta>
+    deactivate PR
+    SP --> PC : Page<PreguntaDTO.Resumen>
+    deactivate SP
+    PC --> V : 200 OK { Page<PreguntaDTO.Resumen> }
+    deactivate PC
+    V --> A : grilla actualizada
+    deactivate V
+
+end
+
+== Paso 6 - El caso de uso termina ==
+
+A -> V : salir()
+
+@enduml

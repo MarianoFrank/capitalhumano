@@ -111,6 +111,15 @@ export default function GenerarEvaluacion() {
         }
     };
 
+    const manejarContinuarPuesto = async () => {
+        try {
+            await evaluacionesService.validarCandidatos(candidatosSeleccionados.map((c) => c.id));
+            setModalPuestoVisible(true);
+        } catch (error) {
+            mostrarError(error.response?.data?.message || 'Algunos candidatos seleccionados ya poseen cuestionarios activos o en proceso.');
+        }
+    };
+
     const manejarGenerarEvaluacion = async () => {
         setGenerando(true);
         try {
@@ -242,7 +251,7 @@ export default function GenerarEvaluacion() {
                 cantidadSeleccionados={candidatosSeleccionados.length}
                 alAbrirPanel={() => setPanelVisible(true)}
                 alLimpiar={() => setCandidatosSeleccionados([])}
-                alContinuarPuesto={() => setModalPuestoVisible(true)}
+                alContinuarPuesto={manejarContinuarPuesto}
             />
 
             <PanelCandidatosSeleccionados

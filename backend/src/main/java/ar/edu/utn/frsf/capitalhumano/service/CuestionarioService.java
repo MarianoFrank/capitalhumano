@@ -8,11 +8,13 @@ import ar.edu.utn.frsf.capitalhumano.model.ItemOpcion;
 import ar.edu.utn.frsf.capitalhumano.model.ItemPregunta;
 import ar.edu.utn.frsf.capitalhumano.model.enums.EstadoCuestionario;
 import ar.edu.utn.frsf.capitalhumano.repository.CuestionarioRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,9 @@ public class CuestionarioService {
     private final ApplicationEventPublisher eventPublisher;
     private final EvaluacionService evaluacionService;
 
+    @Value("${app.cuestionario.max-accesos:3}")
+    private int maxAccesos = 3;
+
     public CuestionarioService(CuestionarioRepository cuestionarioRepository,
                                ApplicationEventPublisher eventPublisher,
                                EvaluacionService evaluacionService) {
@@ -31,14 +36,13 @@ public class CuestionarioService {
         this.evaluacionService = evaluacionService;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public CuestionarioDTO.Inicio iniciarCuestionario(Long idCuestionario) {
         Cuestionario cuestionario = cuestionarioRepository.findById(idCuestionario)
                 .orElseThrow(() -> new IllegalArgumentException("Cuestionario no encontrado"));
 
-        if (cuestionario.getEstado() == EstadoCuestionario.COMPLETED) {
-            throw new IllegalArgumentException("El cuestionario ya fue completado.");
-        }
+        LocalDateTime ahora = LocalDateTime.now();
+        validarDisponibilidadYCerrarSiVencio(cuestionario, ahora, true);
 
         if (cuestionario.getBloques() == null || cuestionario.getBloques().isEmpty()) {
             evaluacionService.generarEstructuraCuestionario(cuestionario, cuestionario.getEvaluacion().getPuesto());
@@ -46,11 +50,11 @@ public class CuestionarioService {
 
         if (cuestionario.getEstado() == EstadoCuestionario.ACTIVE) {
             cuestionario.setEstado(EstadoCuestionario.IN_PROGRESS);
-            cuestionario.setFechaInicio(LocalDateTime.now());
+            cuestionario.setFechaInicio(ahora);
         }
 
         cuestionario.setCantidadAccesos(cuestionario.getCantidadAccesos() + 1);
-        cuestionario.setUltimoAcceso(LocalDateTime.now());
+        cuestionario.setUltimoAcceso(ahora);
 
         cuestionarioRepository.save(cuestionario);
 
@@ -60,10 +64,12 @@ public class CuestionarioService {
         return CuestionarioDTO.Inicio.from(cuestionario, totalBloques, bloqueActual);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public CuestionarioDTO.Bloque obtenerBloque(Long idCuestionario, int numeroBloque) {
         Cuestionario cuestionario = cuestionarioRepository.findById(idCuestionario)
                 .orElseThrow(() -> new IllegalArgumentException("Cuestionario no encontrado"));
+
+        validarDisponibilidadYCerrarSiVencio(cuestionario, LocalDateTime.now(), false);
 
         if (cuestionario.getEstado() != EstadoCuestionario.IN_PROGRESS) {
             throw new IllegalArgumentException("El cuestionario no se encuentra en curso.");
@@ -111,10 +117,13 @@ public class CuestionarioService {
         return Math.max(1, cuestionario.getBloques().size());
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = IllegalStateException.class)
     public void guardarRespuestasBloque(Long idCuestionario, int numeroBloque, Map<Long, List<Long>> respuestas) {
         Cuestionario cuestionario = cuestionarioRepository.findById(idCuestionario)
                 .orElseThrow(() -> new IllegalArgumentException("Cuestionario no encontrado"));
+
+        LocalDateTime ahora = LocalDateTime.now();
+        validarDisponibilidadYCerrarSiVencio(cuestionario, ahora, false);
 
         if (cuestionario.getEstado() != EstadoCuestionario.IN_PROGRESS) {
             throw new IllegalArgumentException("El cuestionario ya fue finalizado o no está en curso.");
@@ -156,11 +165,63 @@ public class CuestionarioService {
 
         if (numeroBloque == cuestionario.getBloques().size()) {
             cuestionario.setEstado(EstadoCuestionario.COMPLETED);
-            cuestionario.setFechaFin(LocalDateTime.now());
+            cuestionario.setFechaFin(ahora);
             eventPublisher.publishEvent(new CuestionarioCompletadoEvent(cuestionario.getId()));
         }
 
         cuestionarioRepository.save(cuestionario);
+    }
+
+    @Transactional
+    public void finalizarPorTiempoAgotado(Long idCuestionario) {
+        Cuestionario cuestionario = cuestionarioRepository.findById(idCuestionario)
+                .orElseThrow(() -> new IllegalArgumentException("Cuestionario no encontrado"));
+
+        if (cuestionario.getEstado() == EstadoCuestionario.IN_PROGRESS) {
+            cuestionario.setEstado(EstadoCuestionario.INCOMPLETE);
+            cuestionario.setFechaFin(LocalDateTime.now());
+            cuestionarioRepository.save(cuestionario);
+        }
+    }
+
+    private void validarDisponibilidadYCerrarSiVencio(Cuestionario cuestionario, LocalDateTime ahora, boolean validarMaxAccesos) {
+        if (cuestionario.getEstado() == EstadoCuestionario.COMPLETED) {
+            throw new IllegalStateException("El cuestionario ya fue completado.");
+        }
+
+        if (cuestionario.getEstado() == EstadoCuestionario.INCOMPLETE ||
+                cuestionario.getEstado() == EstadoCuestionario.NOT_ANSWERED) {
+            throw new IllegalStateException("El cuestionario ya no se encuentra disponible.");
+        }
+
+        if (cuestionario.getEvaluacion() != null && cuestionario.getEvaluacion().getFechaCierre() != null
+                && ahora.isAfter(cuestionario.getEvaluacion().getFechaCierre())) {
+            cuestionario.setEstado(cuestionario.getEstado() == EstadoCuestionario.ACTIVE
+                    ? EstadoCuestionario.NOT_ANSWERED
+                    : EstadoCuestionario.INCOMPLETE);
+            cuestionario.setFechaFin(ahora);
+            cuestionarioRepository.save(cuestionario);
+            throw new IllegalStateException("El plazo para realizar el cuestionario ha vencido.");
+        }
+
+        if (cuestionario.getEstado() == EstadoCuestionario.IN_PROGRESS && cuestionario.getFechaInicio() != null
+                && cuestionario.getEvaluacion() != null && cuestionario.getEvaluacion().getDuracion() != null) {
+            LocalDateTime limite = cuestionario.getFechaInicio().plusMinutes(cuestionario.getEvaluacion().getDuracion());
+            if (ahora.isAfter(limite)) {
+                cuestionario.setEstado(EstadoCuestionario.INCOMPLETE);
+                cuestionario.setFechaFin(ahora);
+                cuestionarioRepository.save(cuestionario);
+                throw new IllegalStateException("Tiempo para completar el cuestionario agotado.");
+            }
+        }
+
+        if (validarMaxAccesos && cuestionario.getCantidadAccesos() + 1 > maxAccesos) {
+            cuestionario.setEstado(EstadoCuestionario.INCOMPLETE);
+            cuestionario.setFechaFin(ahora);
+            cuestionarioRepository.save(cuestionario);
+            throw new IllegalStateException(
+                    "Superó la cantidad máxima de accesos permitidos. El cuestionario quedó en estado Incompleto.");
+        }
     }
 
     @Transactional
@@ -171,22 +232,28 @@ public class CuestionarioService {
                 EstadoCuestionario.ACTIVE,
                 EstadoCuestionario.IN_PROGRESS);
 
-        List<Cuestionario> cuestionariosVencidos = cuestionarioRepository
-                .findExpiredQuestionnaires(ahora, estadosAbiertos);
+        List<Cuestionario> abiertos = cuestionarioRepository.findByEstadoIn(estadosAbiertos);
+        List<Cuestionario> cuestionariosVencidos = new ArrayList<>();
 
-        if (cuestionariosVencidos.isEmpty()) {
-            return;
-        }
+        for (Cuestionario q : abiertos) {
+            boolean vencioCierre = q.getEvaluacion() != null && q.getEvaluacion().getFechaCierre() != null
+                    && q.getEvaluacion().getFechaCierre().isBefore(ahora);
+            boolean vencioDuracion = q.getEstado() == EstadoCuestionario.IN_PROGRESS
+                    && q.getFechaInicio() != null
+                    && q.getEvaluacion() != null && q.getEvaluacion().getDuracion() != null
+                    && q.getFechaInicio().plusMinutes(q.getEvaluacion().getDuracion()).isBefore(ahora);
 
-        for (Cuestionario q : cuestionariosVencidos) {
-            if (q.getEstado() == EstadoCuestionario.ACTIVE) {
-                q.setEstado(EstadoCuestionario.NOT_ANSWERED);
-            } else if (q.getEstado() == EstadoCuestionario.IN_PROGRESS) {
-                q.setEstado(EstadoCuestionario.INCOMPLETE);
+            if (vencioCierre || vencioDuracion) {
+                q.setEstado(q.getEstado() == EstadoCuestionario.ACTIVE
+                        ? EstadoCuestionario.NOT_ANSWERED
+                        : EstadoCuestionario.INCOMPLETE);
+                q.setFechaFin(ahora);
+                cuestionariosVencidos.add(q);
             }
-            q.setFechaFin(ahora);
         }
 
-        cuestionarioRepository.saveAll(cuestionariosVencidos);
+        if (!cuestionariosVencidos.isEmpty()) {
+            cuestionarioRepository.saveAll(cuestionariosVencidos);
+        }
     }
 }

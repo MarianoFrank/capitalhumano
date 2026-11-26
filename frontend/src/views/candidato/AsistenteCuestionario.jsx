@@ -120,7 +120,12 @@ export default function AsistenteCuestionario() {
         }
     };
 
-    const manejarTiempoCumplido = () => {
+    const manejarTiempoCumplido = async () => {
+        try {
+            await cuestionariosService.expirar(id);
+        } catch {
+            // Si ya estaba cerrado, continuamos con la redirección
+        }
         mostrarError('¡Se acabó el tiempo! Tu evaluación será cerrada.');
         navigate(`/cuestionario/${id}/completado`, { replace: true });
     };

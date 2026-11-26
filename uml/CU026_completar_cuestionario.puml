@@ -1,0 +1,280 @@
+@startuml CU026_CompletarCuestionario
+
+title CU026 - Completar Cuestionario
+
+actor Candidato as A
+
+box "Frontend" #F7F7F7
+    participant ":CuestionarioView" as V
+end box
+
+box "Backend" #EFF4F8
+    participant ":CuestionarioController" as CC
+    participant ":CuestionarioService" as SC
+    participant ":CuestionarioRepository" as CR
+    participant ":PuntajeAsyncService" as PA
+    participant "cuestionario : Cuestionario" as C
+    participant "bloque : Bloque" as B
+    participant "item : ItemPregunta" as IP
+    participant "itemOpcion : ItemOpcion" as IO
+    participant "puntajeCompetencia : PuntajeCompetencia" as PCo
+    participant "puntajeFactor : PuntajeFactor" as PF
+end box
+
+== Pasos 1 a 3 - Instrucciones, validacion de disponibilidad e inicio/reanudacion ==
+
+' Precondicion: el candidato se autentico (POST /api/autenticacion/candidato/iniciar-sesion),
+' la vista conoce idCuestionario y SecurityService verifica esPropietarioCuestionario(idCuestionario)
+A -> V : ingresarAlCuestionario()
+activate V
+V --> A : pantalla "Instrucciones de la Evaluacion"\ncon boton "Comenzar Evaluacion"
+deactivate V
+
+alt 2.A - El actor decide no continuar (sale o cierra)
+
+    A -> V : cancelar()
+    activate V
+    V --> A : retorna sin iniciar el cuestionario
+    deactivate V
+    note right of V : 2.A.1 - El CU termina
+
+else El actor presiona "Comenzar Evaluacion"
+
+    A -> V : aceptar()
+    activate V
+
+    V -> CC : POST /api/cuestionarios/{idCuestionario}/iniciar
+    activate CC
+    CC -> SC : iniciarCuestionario(idCuestionario)
+    activate SC
+
+    SC -> CR : findById(idCuestionario)
+    activate CR
+    CR --> SC : Optional<Cuestionario>
+    deactivate CR
+
+    ' Valida estado, fechaCierre, duracion (si estaba IN_PROGRESS) y cantidadAccesos <= maxAccesos
+    SC -> SC : validarDisponibilidadYCerrarSiVencio(cuestionario, ahora, true)
+    activate SC #E8E8E8
+    deactivate SC
+
+    alt Precondicion / 1.A / 1.B - Cuestionario vencido, sin accesos disponibles o ya finalizado
+
+        opt Vencio fechaCierre, tiempo limite o supero maxAccesos
+            SC -> C : setEstado(INCOMPLETE | NOT_ANSWERED), setFechaFin(ahora)
+            SC -> CR : save(cuestionario)
+            activate CR
+            CR --> SC : cuestionario
+            deactivate CR
+        end
+
+        SC --> CC : IllegalStateException
+        deactivate SC
+        CC --> V : 409 Conflict { ApiErrorResponse }
+        deactivate CC
+        V --> A : mensaje indicando el motivo de no disponibilidad
+        deactivate V
+        note right of V : El CU finaliza
+
+    else El cuestionario puede realizarse (ACTIVE o IN_PROGRESS dentro del tiempo y accesos)
+
+        opt Si estaba ACTIVE, pasa a IN_PROGRESS y registra fechaInicio
+            SC -> C : setEstado(EstadoCuestionario.IN_PROGRESS), setFechaInicio(ahora)
+        end
+
+        SC -> C : setCantidadAccesos(+1), setUltimoAcceso(ahora)
+        SC -> CR : save(cuestionario)
+        activate CR
+        CR --> SC : cuestionario
+        deactivate CR
+
+        ' Si ya habia bloques respondidos, calcula el primer bloque incompleto (reanudacion 1.C)
+        SC -> SC : calcularBloqueActual(cuestionario)
+        activate SC #E8E8E8
+        deactivate SC
+
+        SC --> CC : CuestionarioDTO.Inicio
+        deactivate SC
+        CC --> V : 200 OK { CuestionarioDTO.Inicio }
+        deactivate CC
+
+        == Paso 4 - El sistema presenta el wizard posicionado en el bloque actual ==
+
+        loop por cada bloque pendiente (numeroBloque = bloqueActual .. totalBloques)
+
+            V -> CC : GET /api/cuestionarios/{idCuestionario}/bloques/{numeroBloque}
+            activate CC
+            CC -> SC : obtenerBloque(idCuestionario, numeroBloque)
+            activate SC
+            SC -> CR : findById(idCuestionario)
+            activate CR
+            CR --> SC : Optional<Cuestionario>
+            deactivate CR
+
+            SC -> SC : validarDisponibilidadYCerrarSiVencio(cuestionario, ahora, false)
+            activate SC #E8E8E8
+            deactivate SC
+
+            SC --> CC : CuestionarioDTO.Bloque
+            deactivate SC
+            CC --> V : 200 OK { CuestionarioDTO.Bloque }
+            deactivate CC
+            V --> A : "Bloque n de N" con preguntas, opciones y temporizador
+            deactivate V
+
+            == Paso 5 - El actor contesta las preguntas del bloque ==
+
+            opt Se agota el temporizador en 00:00
+                V -> CC : POST /api/cuestionarios/{idCuestionario}/expirar
+                activate V
+                activate CC
+                CC -> SC : finalizarPorTiempoAgotado(idCuestionario)
+                activate SC
+                SC -> CR : findById(idCuestionario)
+                activate CR
+                CR --> SC : Optional<Cuestionario>
+                deactivate CR
+                SC -> C : setEstado(EstadoCuestionario.INCOMPLETE), setFechaFin(ahora)
+                SC -> CR : save(cuestionario)
+                activate CR
+                CR --> SC : cuestionario
+                deactivate CR
+                SC --> CC : void
+                deactivate SC
+                CC --> V : 200 OK
+                deactivate CC
+                V --> A : "¡Se acabo el tiempo! Tu evaluacion sera cerrada."
+                deactivate V
+                note right of V : El CU finaliza
+            end
+
+            loop por cada pregunta del bloque
+                A -> V : seleccionarOpcion(idItemPregunta, idOpcion)
+            end
+
+            A -> V : siguienteBloque() o finalizarEvaluacion()
+            activate V
+
+            == Paso 6 - El sistema valida que se hayan respondido todas las preguntas ==
+
+            V -> V : validarRespuestasCompletas()
+            activate V #E8E8E8
+            deactivate V
+
+            alt 6.A - Faltan preguntas por responder en el bloque
+
+                V --> A : "Por favor, responde todas las preguntas antes de avanzar."
+                deactivate V
+
+            else Todas las preguntas del bloque fueron respondidas
+
+                == Paso 7 - El sistema guarda el bloque contestado ==
+
+                V -> CC : POST /api/cuestionarios/{idCuestionario}/bloques/{numeroBloque}/responder\n{ Map<Long, List<Long>> }
+                activate CC
+                CC -> SC : guardarRespuestasBloque(idCuestionario, numeroBloque, respuestas)
+                activate SC
+
+                SC -> CR : findById(idCuestionario)
+                activate CR
+                CR --> SC : Optional<Cuestionario>
+                deactivate CR
+
+                SC -> SC : validarDisponibilidadYCerrarSiVencio(cuestionario, ahora, false)
+                activate SC #E8E8E8
+                deactivate SC
+
+                alt Se agoto el tiempo maximo (ahora > fechaInicio + duracion)
+
+                    SC -> C : setEstado(EstadoCuestionario.INCOMPLETE), setFechaFin(ahora)
+                    SC -> CR : save(cuestionario)
+                    activate CR
+                    CR --> SC : cuestionario
+                    deactivate CR
+                    SC --> CC : IllegalStateException("Tiempo... agotado")
+                    deactivate SC
+                    CC --> V : 409 Conflict { ApiErrorResponse }
+                    deactivate CC
+                    V --> A : "Tiempo para completar el cuestionario agotado"
+                    deactivate V
+
+                else Dentro del tiempo permitido
+
+                    loop por cada ItemPregunta del Bloque
+                        loop por cada ItemOpcion del ItemPregunta
+                            SC -> IO : setEstaRespondida(seleccionada)
+                        end
+                    end
+
+                    opt Paso 8 - Es el ultimo bloque del cuestionario
+                        SC -> C : setEstado(EstadoCuestionario.COMPLETED), setFechaFin(ahora)
+                        SC -> SC : eventPublisher.publishEvent(new CuestionarioCompletadoEvent(id))
+                        activate SC #E8E8E8
+                        deactivate SC
+                    end
+
+                    SC -> CR : save(cuestionario)
+                    activate CR
+                    CR --> SC : cuestionario
+                    deactivate CR
+                    SC --> CC : void
+                    deactivate SC
+                    CC --> V : 200 OK
+                    deactivate CC
+
+                    alt 8.A - Existen mas bloques de preguntas
+                        V --> A : avanza al siguiente bloque
+                        deactivate V
+                    else Es el ultimo bloque
+                        V --> A : "¡Evaluacion finalizada con exito!"
+                        deactivate V
+
+                        == Calculo asincrono de puntajes (AFTER_COMMIT + @Async) ==
+
+                        SC ->> PA : <<Event>> calcularPuntajesAsync(CuestionarioCompletadoEvent)
+                        activate PA
+                        PA -> PA : calcularPuntajeSincrono(idCuestionario)
+                        activate PA #E8E8E8
+
+                        PA -> CR : findById(idCuestionario)
+                        activate CR
+                        CR --> PA : Optional<Cuestionario>
+                        deactivate CR
+
+                        loop por cada competencia del puesto
+                            create PCo
+                            PA -> PCo : <<create>> new PuntajeCompetencia()
+
+                            loop por cada factor de la competencia
+                                loop por cada ItemPregunta del factor
+                                    note right of PA : Suma ponderaciones seleccionadas\n(en MULTIPLE_CHOICE penaliza distractoras con peso 0)
+                                end
+                                opt El factor fue evaluado
+                                    create PF
+                                    PA -> PF : <<create>> new PuntajeFactor(factor, sumaPesosFactor / 2.0)
+                                    PA -> PCo : getPuntajesFactores().add(fScore)
+                                end
+                            end
+
+                            PA -> PCo : setPuntaje(sumaFactores / cantidadFactoresEvaluados)
+                            PA -> C : getPuntajesCompetencias().add(compScore)
+                        end
+
+                        PA -> C : setPuntajeTotal(sumaCompetencias / cantidadCompetencias)
+                        PA -> CR : save(cuestionario)
+                        activate CR
+                        CR --> PA : cuestionario
+                        deactivate CR
+                        deactivate PA
+                        deactivate PA
+
+                    end
+                end
+            end
+        end
+    end
+end
+
+== Paso 9 - El CU termina ==
+
+@enduml

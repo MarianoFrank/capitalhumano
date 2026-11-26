@@ -14,6 +14,10 @@ export const cuestionariosService = {
     async responderBloque(idCuestionario, numeroBloque, respuestas) {
         const { data } = await api.post(`/api/cuestionarios/${idCuestionario}/bloques/${numeroBloque}/responder`, respuestas);
         return data;
+    },
+
+    async expirar(idCuestionario) {
+        await api.post(`/api/cuestionarios/${idCuestionario}/expirar`);
     }
 };
 
