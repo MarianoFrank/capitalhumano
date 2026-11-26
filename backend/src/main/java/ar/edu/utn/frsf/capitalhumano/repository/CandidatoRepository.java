@@ -20,8 +20,8 @@ public interface CandidatoRepository extends JpaRepository<Candidato, Long> {
 
     @Query("""
         SELECT c FROM Candidato c
-        WHERE (:nombre IS NULL OR LOWER(c.nombre) LIKE LOWER(CONCAT('%', :nombre, '%')))
-          AND (:apellido IS NULL OR LOWER(c.apellido) LIKE LOWER(CONCAT('%', :apellido, '%')))
+        WHERE (:nombre IS NULL OR LOWER(c.nombre) LIKE LOWER(CONCAT('%', CAST(:nombre AS string), '%')))
+          AND (:apellido IS NULL OR LOWER(c.apellido) LIKE LOWER(CONCAT('%', CAST(:apellido AS string), '%')))
           AND (:numeroCandidato IS NULL OR c.numeroCandidato = :numeroCandidato)
     """)
     Page<Candidato> buscarConFiltros(

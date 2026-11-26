@@ -42,7 +42,7 @@ public interface PreguntaRepository extends JpaRepository<Pregunta, Long> {
             WHERE p.fechaBaja IS NULL
               AND (:idCompetencia IS NULL OR c.id = :idCompetencia)
               AND (:idFactor IS NULL OR f.id = :idFactor)
-              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :nombre, '%')))
+              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', CAST(:nombre AS string), '%')))
         """,
         countQuery = """
             SELECT COUNT(DISTINCT p)
@@ -52,7 +52,7 @@ public interface PreguntaRepository extends JpaRepository<Pregunta, Long> {
             WHERE p.fechaBaja IS NULL
               AND (:idCompetencia IS NULL OR c.id = :idCompetencia)
               AND (:idFactor IS NULL OR f.id = :idFactor)
-              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :nombre, '%')))
+              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', CAST(:nombre AS string), '%')))
         """
     )
     Page<Pregunta> buscarConFiltros(

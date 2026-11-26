@@ -30,8 +30,8 @@ public interface PuestoRepository extends JpaRepository<Puesto, Long> {
             WHERE p.fechaBaja IS NULL
               AND EXISTS (SELECT 1 FROM Evaluacion ev WHERE ev.puesto = p)
               AND (:idEmpresa IS NULL OR e.id = :idEmpresa)
-              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :nombre, '%')))
-              AND (:codigo IS NULL OR LOWER(p.codigo) LIKE LOWER(CONCAT('%', :codigo, '%')))
+              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', CAST(:nombre AS string), '%')))
+              AND (:codigo IS NULL OR LOWER(p.codigo) LIKE LOWER(CONCAT('%', CAST(:codigo AS string), '%')))
         """,
         countQuery = """
             SELECT COUNT(DISTINCT p)
@@ -40,8 +40,8 @@ public interface PuestoRepository extends JpaRepository<Puesto, Long> {
             WHERE p.fechaBaja IS NULL
               AND EXISTS (SELECT 1 FROM Evaluacion ev WHERE ev.puesto = p)
               AND (:idEmpresa IS NULL OR e.id = :idEmpresa)
-              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', :nombre, '%')))
-              AND (:codigo IS NULL OR LOWER(p.codigo) LIKE LOWER(CONCAT('%', :codigo, '%')))
+              AND (:nombre IS NULL OR LOWER(p.nombre) LIKE LOWER(CONCAT('%', CAST(:nombre AS string), '%')))
+              AND (:codigo IS NULL OR LOWER(p.codigo) LIKE LOWER(CONCAT('%', CAST(:codigo AS string), '%')))
         """
     )
     Page<Puesto> buscarParaReporte(
